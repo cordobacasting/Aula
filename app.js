@@ -360,19 +360,19 @@ async function callManageUsers(payload){
 function newUserForm(){
   return `<div class="field"><label>Nombre y apellido</label><input name="full_name" required></div>
   <div class="field"><label>Email</label><input name="email" type="email" required></div>
+  <div class="field"><label>Contraseña inicial</label><input name="password" type="text" minlength="6" required placeholder="Mínimo 6 caracteres"><div style="font-size:.72rem;color:var(--muted);margin-top:5px">Esta será la contraseña con la que el usuario ingresará por primera vez.</div></div>
   <div class="field"><label>Rol</label><select name="role"><option value="student">Alumno</option><option value="teacher">Profesor</option></select></div>
   <div class="field"><label>Cursos</label><div class="course-check-grid">${state.courses.map(c=>`<label class="course-check"><input type="checkbox" name="course_ids" value="${c.id}"><span><strong>${esc(c.name)}</strong><small>${esc(c.code||"")}</small></span></label>`).join("")}</div></div>
-  <div class="notice">Se generará una contraseña temporal y se mostrará una sola vez al terminar.</div>`;
+  <div class="notice">Elegí una contraseña inicial de al menos 6 caracteres. Después podés enviársela al alumno o profesor junto con su email.</div>`;
 }
 function showCreatedUser(result){
- const creds=`Email: ${result.user.email}\nContraseña temporal: ${result.temporary_password}`;
  const w=document.createElement("div");w.className="modal-backdrop";
  w.innerHTML=`<div class="modal-card"><div class="modal-head"><h2>Usuario creado</h2><button class="modal-close">×</button></div>
+ <div class="credential"><span>Nombre</span><strong>${esc(result.user.full_name)}</strong></div>
  <div class="credential"><span>Email</span><strong>${esc(result.user.email)}</strong></div>
- <div class="credential"><span>Contraseña temporal</span><strong class="credential-password">${esc(result.temporary_password)}</strong></div>
- <p class="credential-help">Copiá estos datos ahora.</p><div class="modal-actions"><button class="secondary copy-access">Copiar acceso</button><button class="primary done">Listo</button></div></div>`;
+ <p class="credential-help">La cuenta ya está activa y puede ingresar con el email y la contraseña inicial que acabás de definir.</p>
+ <div class="modal-actions"><button class="primary done">Listo</button></div></div>`;
  document.body.appendChild(w);const close=()=>w.remove();w.querySelector(".modal-close").onclick=close;w.querySelector(".done").onclick=close;
- w.querySelector(".copy-access").onclick=async()=>{try{await navigator.clipboard.writeText(creds);toast("Acceso copiado");}catch{toast("No se pudo copiar",true);}};
 }
 async function usersHTML(){
   if(!isAdmin())return `<div class="empty">Sin permiso.</div>`;
@@ -477,7 +477,7 @@ function bindContent(){
   const newUserBtn=document.getElementById("newUserBtn");
   if(newUserBtn)newUserBtn.onclick=()=>showModal("Nuevo usuario",newUserForm(),async fd=>{
     try{
-      const result=await callManageUsers({action:"create_user",full_name:String(fd.get("full_name")||"").trim(),email:String(fd.get("email")||"").trim(),role:String(fd.get("role")||"student"),course_ids:fd.getAll("course_ids").map(Number)});
+      const result=await callManageUsers({action:"create_user",full_name:String(fd.get("full_name")||"").trim(),email:String(fd.get("email")||"").trim(),password:String(fd.get("password")||"").trim(),role:String(fd.get("role")||"student"),course_ids:fd.getAll("course_ids").map(Number)});
       toast("Usuario creado");setTimeout(()=>showCreatedUser(result),100);renderShell();return true;
     }catch(err){toast(err.message||"No se pudo crear el usuario",true);return false;}
   });

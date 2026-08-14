@@ -1,0 +1,25 @@
+AULA VIRTUAL CÓRDOBA CASTING · V6
+
+Esta versión corresponde a la nueva Edge Function manage-users donde EL ADMINISTRADOR elige la contraseña inicial.
+
+PASOS:
+1. La Edge Function `manage-users` nueva ya debe estar desplegada.
+2. Reemplazá en GitHub los archivos de esta carpeta/ZIP por los actuales.
+3. No hace falta ejecutar SQL.
+4. Esperá el deploy de GitHub Pages.
+5. Hacé Ctrl + Shift + R.
+6. Ingresá como admin → Usuarios y accesos → + Nuevo usuario.
+
+ALTA:
+- Nombre y apellido
+- Email
+- Contraseña inicial (mínimo 6 caracteres)
+- Rol: Alumno o Profesor
+- Uno o varios cursos
+
+BAJA:
+- Los alumnos y profesores tienen botón Eliminar.
+- Las cuentas admin quedan protegidas.
+
+IMPORTANTE:
+No hay claves secretas de Supabase en el frontend.
