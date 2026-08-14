@@ -237,3 +237,25 @@ body{background:
   .pdf-toolbar{align-items:flex-start;flex-direction:column}
   .pdf-frame{height:72vh;min-height:500px}
 }
+
+/* PROFES + AVATARES */
+.avatar{object-fit:cover;border:2px solid rgba(123,8,38,.16);cursor:pointer}
+.teacher-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}
+.teacher-card{background:#fff;border:1px solid var(--line);border-radius:20px;padding:18px;display:grid;grid-template-columns:92px 1fr;gap:18px;align-items:start;box-shadow:var(--shadow)}
+.teacher-avatar{width:92px;height:112px;object-fit:cover;border-radius:16px;background:#eee}
+.teacher-card h3{font:800 1.2rem Manrope;color:var(--wine-dark);margin:3px 0}
+.teacher-role{font-size:.76rem;color:var(--purple);font-weight:800;margin-bottom:12px}
+.teacher-course-list{display:flex;flex-wrap:wrap;gap:6px}
+.teacher-course-list span{background:#f2e6e9;color:#6d1730;border-radius:999px;padding:6px 9px;font-size:.72rem;font-weight:700}
+.avatar-picker-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
+.avatar-option{border:2px solid transparent;background:#f8f1f3;border-radius:15px;padding:8px;text-align:center}
+.avatar-option.selected{border-color:var(--wine);box-shadow:0 0 0 3px rgba(123,8,38,.09)}
+.avatar-option img{display:block;width:100%;aspect-ratio:1/1.12;object-fit:cover;border-radius:11px;margin-bottom:7px}
+.avatar-option span{font-size:.72rem;font-weight:800;color:var(--wine-dark)}
+.avatar-credit-note{font-size:.7rem;color:var(--muted);margin:16px 0 0}
+@media(max-width:760px){
+ .teacher-grid{grid-template-columns:1fr}
+ .teacher-card{grid-template-columns:74px 1fr}
+ .teacher-avatar{width:74px;height:88px}
+ .avatar-picker-grid{grid-template-columns:repeat(2,1fr)}
+}

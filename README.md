@@ -1,47 +1,65 @@
-# Aula Virtual Córdoba Casting · V3 con PDF
+# Aula Virtual Córdoba Casting · V4
 
-Esta versión contiene TODO lo de la versión anterior más:
+Incluye todo V3:
+- Supabase Auth
+- Cursos/módulos/contenidos
+- PDF nativo
+- Foro bidireccional
+- Diseño responsive y estética Córdoba Casting
 
-- Login con fondo degradado, sin fotografía promocional.
-- Foro bidireccional:
-  - alumnos, profesores y admin pueden abrir instancias;
-  - todos los miembros del curso pueden responder;
-  - sirve para preguntas, consignas y entregas mediante links.
-- PDF como contenido nativo:
-  - admin/profesor selecciona un PDF desde su computadora;
-  - se sube a Supabase Storage;
-  - el alumno lo lee dentro de la página;
-  - tiene botón para descargarlo;
-  - el bucket es privado y requiere acceso al curso.
+Y agrega:
 
-## IMPORTANTE: orden de actualización
+## Profes
+Visible para alumnos, profesores y admin.
+Muestra únicamente:
+- Nombre
+- Avatar
+- Cursos a cargo
 
-Si YA ejecutaste `supabase_migracion.sql` de la versión de marca:
-1. Abrí Supabase → SQL Editor → New query.
-2. Pegá y ejecutá SOLO `supabase_v3_pdf.sql`.
-   - Este archivo YA incluye el ajuste del foro V2.
-   - No necesitás ejecutar `supabase_foro_v2.sql`.
+No expone emails.
 
-Si todavía NO ejecutaste nunca `supabase_migracion.sql`:
-1. Ejecutá `supabase_migracion.sql`.
-2. Después ejecutá `supabase_v3_pdf.sql`.
+## Avatares
+Cada usuario puede tocar su foto de avatar en la esquina superior derecha y elegir entre:
+- Meryl Streep
+- Susan Sarandon
+- Stella Adler
+- Konstantin Stanislavski
+- Viola Davis
+- Tilda Swinton
 
-Cuando ambos correspondan y den Success:
-3. Reemplazá en GitHub los archivos por los de esta V3.
-4. Esperá el deployment de Pages.
-5. Hacé Ctrl + Shift + R.
+El cambio se realiza mediante una función segura `set_my_avatar`: el usuario no obtiene permisos para cambiar su rol.
 
-## PDF
+Las imágenes se sirven desde Wikimedia Commons.
 
-El bucket se llama `course-pdfs`, es privado y acepta solamente `application/pdf`.
-Límite configurado: 50 MB por archivo.
+## Material docente
+Sólo profesores y admin ven:
+- Biblioteca de ejercicios
+- Guiones
 
-Los PDFs se guardan con esta estructura:
-`ID_CURSO/ID_MODULO/timestamp-nombre.pdf`
+Ambas áreas tienen:
+- módulos;
+- videos;
+- PDF;
+- Drive;
+- enlaces;
+- texto.
 
-La web crea una URL firmada temporal cuando un usuario autorizado abre el PDF.
+Profesores:
+- crear y editar módulos;
+- crear y editar contenido;
+- subir PDF.
 
-## Seguridad
+Administrador:
+- todo lo anterior;
+- además eliminar módulos/contenidos.
 
-La Publishable Key continúa siendo la única clave presente en frontend.
-No se agrega ninguna Secret Key ni service_role.
+## INSTALACIÓN
+
+Ya deberías tener ejecutados:
+1. `supabase_migracion.sql`
+2. `supabase_v3_pdf.sql`
+
+Ahora ejecutá:
+3. `supabase_v4_profes_bibliotecas.sql`
+
+Después subí todos los archivos V4 a GitHub reemplazando la versión anterior.

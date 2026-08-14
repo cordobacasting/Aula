@@ -3,11 +3,49 @@ const { url, publishableKey } = window.SUPABASE_CONFIG;
 const sb = window.supabase.createClient(url, publishableKey);
 
 const state = {
-  user:null, profile:null, courses:[], modules:{}, forum:{},
+  user:null, profile:null, courses:[], modules:{}, forum:{}, teachers:[], staffSpaces:[], staffModules:{},
   view:"dashboard", courseId:null, lessonId:null, courseTab:"content"
 };
 
 const app=document.getElementById("app");
+const AVATARS = {
+  meryl:{
+    name:"Meryl Streep",
+    image:"https://commons.wikimedia.org/wiki/Special:FilePath/Meryl_Streep_February_2016.jpg",
+    source:"https://commons.wikimedia.org/wiki/File:Meryl_Streep_February_2016.jpg"
+  },
+  susan:{
+    name:"Susan Sarandon",
+    image:"https://commons.wikimedia.org/wiki/Special:FilePath/Susan_Sarandon%2C_Festival_de_Sitges_2017_%28cropped%29.jpg",
+    source:"https://commons.wikimedia.org/wiki/File:Susan_Sarandon,_Festival_de_Sitges_2017_(cropped).jpg"
+  },
+  stella:{
+    name:"Stella Adler",
+    image:"https://commons.wikimedia.org/wiki/Special:FilePath/Stella_Adler_in_Shadow_of_The_Thin_Man_trailer.jpg",
+    source:"https://commons.wikimedia.org/wiki/File:Stella_Adler_in_Shadow_of_The_Thin_Man_trailer.jpg"
+  },
+  stanislavski:{
+    name:"Konstantin Stanislavski",
+    image:"https://commons.wikimedia.org/wiki/Special:FilePath/Stanislavsky.jpg",
+    source:"https://commons.wikimedia.org/wiki/File:Stanislavsky.jpg"
+  },
+  viola:{
+    name:"Viola Davis",
+    image:"https://commons.wikimedia.org/wiki/Special:FilePath/Viola_Davis_by_Gage_Skidmore.jpg",
+    source:"https://commons.wikimedia.org/wiki/File:Viola_Davis_by_Gage_Skidmore.jpg"
+  },
+  tilda:{
+    name:"Tilda Swinton",
+    image:"https://commons.wikimedia.org/wiki/Special:FilePath/Tilda_Swinton-60999_%28cropped%29.jpg",
+    source:"https://commons.wikimedia.org/wiki/File:Tilda_Swinton-60999_(cropped).jpg"
+  }
+};
+function avatarInfo(key){return AVATARS[key]||AVATARS.meryl;}
+function avatarHTML(key,name="",className="avatar"){
+  const a=avatarInfo(key);
+  return `<img class="${className}" src="${esc(a.image)}" alt="Avatar ${esc(a.name)}" title="${esc(name||a.name)}">`;
+}
+
 
 function esc(v=""){return String(v??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;"}[c]));}
 function initials(name="Usuario"){return name.split(" ").filter(Boolean).map(x=>x[0]).slice(0,2).join("").toUpperCase();}
@@ -36,7 +74,7 @@ async function boot(){
 }
 async function loadAuthenticatedUser(user){
   state.user=user;
-  const {data:profile,error}=await sb.from("profiles").select("id,full_name,role,created_at").eq("id",user.id).single();
+  const {data:profile,error}=await sb.from("profiles").select("id,full_name,role,avatar_key,created_at").eq("id",user.id).single();
   if(error||!profile){
     app.innerHTML=`<div class="login-panel" style="min-height:100vh"><div class="login-card"><h2>No encontramos tu perfil</h2><p>La cuenta existe, pero no tiene un perfil asociado.</p><button class="primary" id="logoutBroken">Cerrar sesión</button></div></div>`;
     document.getElementById("logoutBroken").onclick=logout;return;
@@ -82,7 +120,11 @@ function sidebarHTML(){
   let h=`<div class="sidebar-logo"><img src="assets/logo.png"><strong>Córdoba Casting</strong></div>
   <div class="nav-section"><div class="nav-title">Aula</div>
     <button class="nav-item ${state.view==="dashboard"?"active":""}" data-view="dashboard"><span>⌂</span><span>Inicio</span></button>
-    <button class="nav-item ${["courses","course","lesson"].includes(state.view)?"active":""}" data-view="courses"><span>▦</span><span>Mis cursos</span></button></div>`;
+    <button class="nav-item ${["courses","course","lesson"].includes(state.view)?"active":""}" data-view="courses"><span>▦</span><span>Mis cursos</span></button>
+    <button class="nav-item ${state.view==="teachers"?"active":""}" data-view="teachers"><span>★</span><span>Profes</span></button></div>`;
+  if(["admin","teacher"].includes(role)) h+=`<div class="nav-section"><div class="nav-title">Material docente</div>
+    <button class="nav-item ${state.view==="exercise-library"?"active":""}" data-view="exercise-library"><span>◇</span><span>Biblioteca de ejercicios</span></button>
+    <button class="nav-item ${state.view==="scripts-library"?"active":""}" data-view="scripts-library"><span>▤</span><span>Guiones</span></button></div>`;
   if(role==="teacher") h+=`<div class="nav-section"><div class="nav-title">Profesor</div>
     <button class="nav-item ${state.view==="manage"?"active":""}" data-view="manage"><span>✎</span><span>Gestionar cursos</span></button>
     <button class="nav-item ${state.view==="upload"?"active":""}" data-view="upload"><span>＋</span><span>Subir contenido</span></button></div>`;
@@ -96,15 +138,109 @@ function sidebarHTML(){
 function renderShell(){
   const p=state.profile;
   app.innerHTML=`<div class="shell"><header class="topbar"><div class="topbar-left"><button class="mobile-menu" id="mobileMenu">☰</button><img class="top-logo" src="assets/logo.png"><div class="logo-word">CÓRDOBA CASTING</div><div class="role-badge">${roleName(p.role)}</div></div>
-    <div class="userbox"><div><strong>${esc(p.full_name)}</strong><div style="font-size:.72rem;color:var(--muted)">${esc(state.user.email||"")}</div></div><div class="avatar">${initials(p.full_name)}</div></div></header>
+    <div class="userbox"><div><strong>${esc(p.full_name)}</strong><div style="font-size:.72rem;color:var(--muted)">${esc(state.user.email||"")}</div></div>${avatarHTML(p.avatar_key,p.full_name,"avatar avatar-choice-trigger")}</div></header>
     <div class="mobile-drawer-backdrop" id="drawerBackdrop"></div><div class="layout"><aside class="sidebar">${sidebarHTML()}</aside><main class="content" id="content"></main></div></div>`;
   document.querySelectorAll("[data-view]").forEach(b=>b.onclick=()=>{state.view=b.dataset.view;state.courseId=null;state.lessonId=null;state.courseTab="content";document.body.classList.remove("menu-open");renderShell();});
   document.getElementById("logout").onclick=logout;
   document.getElementById("mobileMenu").onclick=()=>document.body.classList.toggle("menu-open");
   document.getElementById("drawerBackdrop").onclick=()=>document.body.classList.remove("menu-open");
+  document.querySelector(".avatar-choice-trigger")?.addEventListener("click",showAvatarPicker);
   renderContent();
 }
 
+
+function showAvatarPicker(){
+  const current=state.profile.avatar_key||"meryl";
+  const body=`<div class="avatar-picker-grid">${Object.entries(AVATARS).map(([key,a])=>`
+    <button type="button" class="avatar-option ${current===key?"selected":""}" data-avatar="${key}">
+      <img src="${esc(a.image)}" alt="${esc(a.name)}"><span>${esc(a.name)}</span>
+    </button>`).join("")}</div>
+    <p class="avatar-credit-note">Avatares con imágenes de Wikimedia Commons. Tocá un personaje para usarlo como tu ícono dentro del Aula.</p>`;
+  const wrap=document.createElement("div");wrap.className="modal-backdrop";wrap.innerHTML=`<div class="modal-card"><div class="modal-head"><h2>Elegí tu avatar</h2><button class="modal-close">×</button></div>${body}</div>`;
+  document.body.appendChild(wrap);
+  const close=()=>wrap.remove();
+  wrap.querySelector(".modal-close").onclick=close;wrap.onclick=e=>{if(e.target===wrap)close();};
+  wrap.querySelectorAll(".avatar-option").forEach(btn=>btn.onclick=async()=>{
+    const key=btn.dataset.avatar;
+    const {error}=await sb.rpc("set_my_avatar",{new_avatar_key:key});
+    if(error){toast("No se pudo cambiar el avatar: "+error.message,true);return;}
+    state.profile.avatar_key=key;toast("Avatar actualizado");close();renderShell();
+  });
+}
+async function loadTeachers(){
+  const {data,error}=await sb.rpc("get_teacher_directory");
+  if(error){console.error(error);toast("No se pudieron cargar los profes",true);return [];}
+  state.teachers=data||[];return state.teachers;
+}
+async function teachersHTML(){
+  const rows=await loadTeachers();
+  const grouped={};
+  for(const r of rows){
+    if(!grouped[r.user_id]) grouped[r.user_id]={id:r.user_id,name:r.full_name,role:r.role,avatar_key:r.avatar_key,courses:[]};
+    if(r.course_id) grouped[r.user_id].courses.push({id:r.course_id,name:r.course_name,code:r.course_code});
+  }
+  const teachers=Object.values(grouped);
+  return `<div class="hero"><div><div class="brand-kicker" style="color:#7b0826">Equipo docente</div><h1>Profes</h1><p>Conocé quiénes están a cargo de los cursos del Aula Virtual.</p></div></div>
+  <div class="teacher-grid">${teachers.length?teachers.map(t=>`<article class="teacher-card">
+    ${avatarHTML(t.avatar_key,t.name,"teacher-avatar")}
+    <div><h3>${esc(t.name)}</h3><div class="teacher-role">${t.role==="admin"?"Administración · Docencia":"Profesor/a"}</div>
+    <div class="teacher-course-list">${t.courses.length?t.courses.map(c=>`<span>${esc(c.name)}${c.code?` · ${esc(c.code)}`:""}</span>`).join(""):`<span>Sin cursos asignados actualmente</span>`}</div></div>
+  </article>`).join(""):`<div class="empty">Todavía no hay profesores cargados.</div>`}</div>`;
+}
+
+async function loadStaffSpaces(){
+  const {data,error}=await sb.from("staff_spaces").select("id,slug,title,description").order("id");
+  if(error){toast("No se pudieron cargar los espacios docentes",true);return [];}
+  state.staffSpaces=data||[];return state.staffSpaces;
+}
+async function loadStaffModules(spaceId,force=false){
+  if(state.staffModules[spaceId]&&!force)return state.staffModules[spaceId];
+  const {data,error}=await sb.from("staff_modules").select(`
+    id,space_id,title,description,position,
+    staff_lessons(id,module_id,title,description,content_type,content_url,text_content,position,created_by,created_at)
+  `).eq("space_id",spaceId).order("position",{ascending:true});
+  if(error){toast("No se pudo cargar el material docente",true);return [];}
+  (data||[]).forEach(m=>m.staff_lessons=(m.staff_lessons||[]).sort((a,b)=>(a.position||0)-(b.position||0)));
+  state.staffModules[spaceId]=data||[];return state.staffModules[spaceId];
+}
+async function uploadStaffPdfFile(file,spaceId,moduleId){
+  if(!file)throw new Error("Seleccioná un archivo PDF.");
+  if(file.type!=="application/pdf"&&!file.name.toLowerCase().endsWith(".pdf"))throw new Error("El archivo debe ser PDF.");
+  const safe=file.name.replace(/[^a-zA-Z0-9._-]+/g,"-");
+  const path=`${spaceId}/${moduleId}/${Date.now()}-${safe}`;
+  const {error}=await sb.storage.from("staff-pdfs").upload(path,file,{contentType:"application/pdf",upsert:false});
+  if(error)throw error;return path;
+}
+async function getStaffPdfSignedUrl(path){
+  const {data,error}=await sb.storage.from("staff-pdfs").createSignedUrl(path,3600);
+  if(error)return null;return data?.signedUrl||null;
+}
+async function staffLibraryHTML(slug){
+  if(!isStaff())return `<div class="empty">Esta sección es exclusiva para profesores y administración.</div>`;
+  if(!state.staffSpaces.length)await loadStaffSpaces();
+  const space=state.staffSpaces.find(s=>s.slug===slug);
+  if(!space)return `<div class="empty">Espacio no encontrado.</div>`;
+  const mods=await loadStaffModules(space.id);
+  return `<div class="hero"><div><div class="brand-kicker" style="color:#7b0826">Material docente</div><h1>${esc(space.title)}</h1><p>${esc(space.description||"")}</p></div>
+    <button class="primary add-staff-module" data-space="${space.id}">+ Nuevo módulo</button></div>
+    <section class="panel">${mods.length?mods.map((m,i)=>`<div class="module">
+      <div class="module-head"><div class="module-title"><div class="module-number">${i+1}</div><div><strong>${esc(m.title)}</strong><div style="font-size:.75rem;color:var(--muted)">${m.staff_lessons.length} contenidos</div></div></div>
+      <div class="admin-actions"><button class="secondary mini edit-staff-module" data-space="${space.id}" data-module="${m.id}">Editar módulo</button>${isAdmin()?`<button class="danger mini delete-staff-module" data-space="${space.id}" data-module="${m.id}">Eliminar</button>`:""}<button class="gold-button mini add-staff-lesson" data-space="${space.id}" data-module="${m.id}">+ Contenido</button></div></div>
+      ${m.staff_lessons.map((l,j)=>`<div class="lesson-admin-row"><div class="lesson-index">${String(j+1).padStart(2,"0")}</div><div><strong>${esc(l.title)}</strong><div style="font-size:.75rem;color:var(--muted)">${typeLabel(l.content_type)}</div></div>
+      <div class="admin-actions"><button class="secondary mini view-staff-lesson" data-space="${space.id}" data-module="${m.id}" data-lesson="${l.id}">Ver</button><button class="secondary mini edit-staff-lesson" data-space="${space.id}" data-module="${m.id}" data-lesson="${l.id}">Editar</button>${isAdmin()?`<button class="danger mini delete-staff-lesson" data-space="${space.id}" data-module="${m.id}" data-lesson="${l.id}">Eliminar</button>`:""}</div></div>`).join("")}
+    </div>`).join(""):`<div class="empty">Todavía no hay módulos.</div>`}</section>`;
+}
+async function staffLessonViewer(spaceId,moduleId,lessonId){
+  const mods=await loadStaffModules(spaceId);
+  const m=mods.find(x=>String(x.id)===String(moduleId));const l=m?.staff_lessons.find(x=>String(x.id)===String(lessonId));
+  if(!l)return;
+  let body="";
+  if(l.content_type==="video")body=`<iframe class="video-frame" src="${esc(youtubeEmbed(l.content_url||""))}" allowfullscreen></iframe>`;
+  else if(l.content_type==="pdf"){const u=await getStaffPdfSignedUrl(l.content_url);body=u?`<div class="pdf-shell"><div class="pdf-toolbar"><strong>${esc(l.title)}</strong><a class="secondary mini" href="${esc(u)}" target="_blank">Descargar PDF</a></div><iframe class="pdf-frame" src="${esc(u)}"></iframe></div>`:`<div class="empty">No se pudo abrir el PDF.</div>`;}
+  else if(l.content_type==="text")body=`<div class="material-box" style="text-align:left;white-space:pre-wrap">${esc(l.text_content||"")}</div>`;
+  else body=`<div class="material-box"><a class="primary" target="_blank" href="${esc(l.content_url||"#")}">Abrir material ↗</a></div>`;
+  showModal(l.title,body,async()=>true,true);
+}
 function courseCard(c){
   const image=courseImage(c);
   const style=image?`background-image:url('${esc(image)}')`:`background:linear-gradient(140deg,${esc(c.color||"#7b0826")},#7650c8)`;
@@ -234,9 +370,10 @@ async function manageHTML(){
   return `<div class="hero"><div><div class="brand-kicker" style="color:#7b0826">${isAdmin()?"Administración":"Profesor"}</div><h1>Cursos y contenido</h1><p>${isAdmin()?"Creá, editá y organizá toda la estructura del aula.":"Podés editar los cursos que tenés asignados, sus módulos y su contenido."}</p></div>${isAdmin()?`<button class="primary" id="newCourse">+ Nuevo curso</button>`:""}</div>${h}`;
 }
 
-function showModal(title,body,onSubmit){
-  const wrap=document.createElement("div");wrap.className="modal-backdrop";wrap.innerHTML=`<div class="modal-card"><div class="modal-head"><h2>${esc(title)}</h2><button class="modal-close">×</button></div><form id="modalForm">${body}<div class="modal-actions"><button type="button" class="secondary modal-cancel">Cancelar</button><button class="primary">Guardar</button></div></form></div>`;document.body.appendChild(wrap);
-  const close=()=>wrap.remove();wrap.querySelector(".modal-close").onclick=close;wrap.querySelector(".modal-cancel").onclick=close;wrap.onclick=e=>{if(e.target===wrap)close();};
+function showModal(title,body,onSubmit,viewer=false){
+  const wrap=document.createElement("div");wrap.className="modal-backdrop";wrap.innerHTML=`<div class="modal-card"><div class="modal-head"><h2>${esc(title)}</h2><button class="modal-close">×</button></div>${viewer?`<div>${body}</div>`:`<form id="modalForm">${body}<div class="modal-actions"><button type="button" class="secondary modal-cancel">Cancelar</button><button class="primary">Guardar</button></div></form>`}</div>`;document.body.appendChild(wrap);
+  const close=()=>wrap.remove();wrap.querySelector(".modal-close").onclick=close;if(wrap.querySelector(".modal-cancel"))wrap.querySelector(".modal-cancel").onclick=close;wrap.onclick=e=>{if(e.target===wrap)close();};
+  if(viewer)return;
   const typeSelect=wrap.querySelector(".lesson-type-select");
   if(typeSelect){
     const syncType=()=>{
@@ -263,6 +400,9 @@ async function renderContent(){
   else if(state.view==="admin")c.innerHTML=await adminHTML();
   else if(state.view==="users")c.innerHTML=await usersHTML();
   else if(state.view==="manage")c.innerHTML=await manageHTML();
+  else if(state.view==="teachers")c.innerHTML=await teachersHTML();
+  else if(state.view==="exercise-library")c.innerHTML=await staffLibraryHTML("exercise-library");
+  else if(state.view==="scripts-library")c.innerHTML=await staffLibraryHTML("scripts");
   bindContent();
 }
 function bindContent(){
@@ -350,6 +490,49 @@ function bindContent(){
     });
   });
   document.querySelectorAll(".delete-lesson").forEach(b=>b.onclick=async()=>{if(!isAdmin())return;const cid=Number(b.dataset.course),mid=Number(b.dataset.module),mods=await loadCourseModules(cid),m=mods.find(x=>x.id===mid),l=m.lessons.find(x=>String(x.id)===b.dataset.lesson);if(!confirm(`¿Eliminar “${l.title}”?`))return;const {error}=await sb.from("lessons").delete().eq("id",l.id);if(error){toast(error.message,true);return;}delete state.modules[cid];toast("Contenido eliminado");renderShell();});
+
+  document.querySelectorAll(".add-staff-module").forEach(b=>b.onclick=async()=>{
+    const sid=Number(b.dataset.space),mods=await loadStaffModules(sid);
+    showModal("Nuevo módulo",moduleForm({position:mods.length+1}),async fd=>{const p=Object.fromEntries(fd);p.space_id=sid;p.position=Number(p.position);const {error}=await sb.from("staff_modules").insert(p);if(error){toast(error.message,true);return false;}delete state.staffModules[sid];toast("Módulo creado");renderShell();});
+  });
+  document.querySelectorAll(".edit-staff-module").forEach(b=>b.onclick=async()=>{
+    const sid=Number(b.dataset.space),mods=await loadStaffModules(sid),m=mods.find(x=>String(x.id)===b.dataset.module);
+    showModal("Editar módulo",moduleForm(m),async fd=>{const p=Object.fromEntries(fd);p.position=Number(p.position);const {error}=await sb.from("staff_modules").update(p).eq("id",m.id);if(error){toast(error.message,true);return false;}delete state.staffModules[sid];toast("Módulo actualizado");renderShell();});
+  });
+  document.querySelectorAll(".delete-staff-module").forEach(b=>b.onclick=async()=>{
+    if(!isAdmin())return;const sid=Number(b.dataset.space),mods=await loadStaffModules(sid),m=mods.find(x=>String(x.id)===b.dataset.module);if(!confirm(`¿Eliminar “${m.title}”?`))return;
+    const {error}=await sb.from("staff_modules").delete().eq("id",m.id);if(error){toast(error.message,true);return;}delete state.staffModules[sid];toast("Módulo eliminado");renderShell();
+  });
+  document.querySelectorAll(".add-staff-lesson").forEach(b=>b.onclick=async()=>{
+    const sid=Number(b.dataset.space),mid=Number(b.dataset.module),mods=await loadStaffModules(sid),m=mods.find(x=>x.id===mid);
+    showModal("Agregar contenido",lessonForm({content_type:"video",position:m.staff_lessons.length+1}),async fd=>{
+      const p=Object.fromEntries(fd),file=fd.get("pdf_file");delete p.pdf_file;p.module_id=mid;p.position=Number(p.position);p.created_by=state.user.id;
+      try{
+        if(p.content_type==="pdf")p.content_url=await uploadStaffPdfFile(file,sid,mid);
+        else if(p.content_type==="text")p.content_url=null;
+        else if(!p.content_url){toast("Agregá una URL",true);return false;}
+        const {error}=await sb.from("staff_lessons").insert(p);if(error){toast(error.message,true);return false;}
+        delete state.staffModules[sid];toast("Contenido agregado");renderShell();
+      }catch(err){toast(err.message,true);return false;}
+    });
+  });
+  document.querySelectorAll(".edit-staff-lesson").forEach(b=>b.onclick=async()=>{
+    const sid=Number(b.dataset.space),mid=Number(b.dataset.module),mods=await loadStaffModules(sid),m=mods.find(x=>x.id===mid),l=m.staff_lessons.find(x=>String(x.id)===b.dataset.lesson);
+    showModal("Editar contenido",lessonForm(l),async fd=>{
+      const p=Object.fromEntries(fd),file=fd.get("pdf_file");delete p.pdf_file;p.position=Number(p.position);
+      try{
+        if(p.content_type==="pdf"){if(file&&file.size)p.content_url=await uploadStaffPdfFile(file,sid,mid);else p.content_url=l.content_type==="pdf"?l.content_url:null;if(!p.content_url){toast("Seleccioná un PDF",true);return false;}}
+        else if(p.content_type==="text")p.content_url=null; else if(!p.content_url){toast("Agregá una URL",true);return false;}
+        const {error}=await sb.from("staff_lessons").update(p).eq("id",l.id);if(error){toast(error.message,true);return false;}
+        delete state.staffModules[sid];toast("Contenido actualizado");renderShell();
+      }catch(err){toast(err.message,true);return false;}
+    });
+  });
+  document.querySelectorAll(".delete-staff-lesson").forEach(b=>b.onclick=async()=>{
+    if(!isAdmin())return;const sid=Number(b.dataset.space),mid=Number(b.dataset.module),mods=await loadStaffModules(sid),m=mods.find(x=>x.id===mid),l=m.staff_lessons.find(x=>String(x.id)===b.dataset.lesson);
+    if(!confirm(`¿Eliminar “${l.title}”?`))return;const {error}=await sb.from("staff_lessons").delete().eq("id",l.id);if(error){toast(error.message,true);return;}delete state.staffModules[sid];toast("Contenido eliminado");renderShell();
+  });
+  document.querySelectorAll(".view-staff-lesson").forEach(b=>b.onclick=()=>staffLessonViewer(Number(b.dataset.space),Number(b.dataset.module),Number(b.dataset.lesson)));
 }
 sb.auth.onAuthStateChange(event=>{if(event==="SIGNED_OUT"&&state.user){state.user=null;state.profile=null;renderLogin();}});
 boot();
