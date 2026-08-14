@@ -1,0 +1,20 @@
+AULA VIRTUAL CÓRDOBA CASTING · V7
+
+CAMBIOS
+- Se eliminó del Aula la creación y eliminación de usuarios.
+- Las cuentas se crean/eliminan directamente desde Supabase Authentication.
+- Usuarios y accesos ahora tiene buscador instantáneo.
+- Orden: Administradores → Profesores → Alumnos.
+- Tarjetas compactas: entran 4 por fila en escritorio.
+- Al tocar una persona se despliegan los cursos asignados.
+- Se mantiene desde el Aula la asignación/desasignación de cursos.
+- Selector de avatares más compacto.
+- Nuevos avatares: Al Pacino, Leonardo DiCaprio, Frances McDormand y Willem Dafoe.
+
+ANTES DE SUBIR A GITHUB
+1. Supabase → SQL Editor → New query.
+2. Ejecutá `supabase_v7_avatares.sql`.
+3. Después reemplazá los archivos de GitHub con esta versión.
+4. Esperá Pages y hacé Ctrl + Shift + R.
+
+No hace falta conservar ni usar la Edge Function manage-users.

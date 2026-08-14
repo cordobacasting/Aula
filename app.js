@@ -25,7 +25,7 @@ const AVATARS = {
     source:"https://commons.wikimedia.org/wiki/File:Stella_Adler_in_Shadow_of_The_Thin_Man_trailer.jpg"
   },
   stanislavski:{
-    name:"Konstantin Stanislavski",
+    name:"Stanislavski",
     image:"https://commons.wikimedia.org/wiki/Special:FilePath/Stanislavsky.jpg",
     source:"https://commons.wikimedia.org/wiki/File:Stanislavsky.jpg"
   },
@@ -38,6 +38,26 @@ const AVATARS = {
     name:"Tilda Swinton",
     image:"https://commons.wikimedia.org/wiki/Special:FilePath/Tilda_Swinton-60999_%28cropped%29.jpg",
     source:"https://commons.wikimedia.org/wiki/File:Tilda_Swinton-60999_(cropped).jpg"
+  },
+  pacino:{
+    name:"Al Pacino",
+    image:"https://commons.wikimedia.org/wiki/Special:FilePath/Al_Pacino_in_2016.jpg",
+    source:"https://commons.wikimedia.org/wiki/File:Al_Pacino_in_2016.jpg"
+  },
+  dicaprio:{
+    name:"Leonardo DiCaprio",
+    image:"https://commons.wikimedia.org/wiki/Special:FilePath/Leonardo_DiCaprio_2010.jpg",
+    source:"https://commons.wikimedia.org/wiki/File:Leonardo_DiCaprio_2010.jpg"
+  },
+  mcdormand:{
+    name:"Frances McDormand",
+    image:"https://commons.wikimedia.org/wiki/Special:FilePath/Frances_McDormand_2015_%28cropped%29.jpg",
+    source:"https://commons.wikimedia.org/wiki/File:Frances_McDormand_2015_(cropped).jpg"
+  },
+  dafoe:{
+    name:"Willem Dafoe",
+    image:"https://commons.wikimedia.org/wiki/Special:FilePath/Willem_Dafoe_by_Sasha_Kargaltsev.jpg",
+    source:"https://commons.wikimedia.org/wiki/File:Willem_Dafoe_by_Sasha_Kargaltsev.jpg"
   }
 };
 function avatarInfo(key){return AVATARS[key]||AVATARS.meryl;}
@@ -351,38 +371,93 @@ async function adminHTML(){
   return `<div class="hero"><div><div class="brand-kicker" style="color:#7b0826">Administración</div><h1>Panel general</h1><p>Vista rápida del Aula Virtual de Córdoba Casting.</p></div></div><section class="stats"><div class="stat"><strong>${pc??"—"}</strong><span>usuarios</span></div><div class="stat"><strong>${state.courses.length}</strong><span>cursos activos</span></div><div class="stat"><strong>${mc??"—"}</strong><span>módulos</span></div><div class="stat"><strong>${lc??"—"}</strong><span>contenidos</span></div></section><div class="admin-grid"><section class="panel"><div class="panel-head"><h2>Gestión</h2></div><div class="login-actions"><button class="secondary" data-viewjump="users">Usuarios y accesos</button><button class="secondary" data-viewjump="manage">Cursos y contenido</button></div></section><section class="panel"><div class="panel-head"><h2>Permisos</h2></div><p style="font-size:.86rem;color:var(--muted)">Los profesores pueden editar sus cursos, módulos y contenidos, y subir material. Sólo el administrador puede crear o eliminar cursos.</p></section></div>`;
 }
 
-async function callManageUsers(payload){
-  const {data,error}=await sb.functions.invoke("manage-users",{body:payload});
-  if(error) throw new Error(error.message||"No se pudo realizar la operación.");
-  if(data?.error) throw new Error(data.error);
-  return data;
-}
-function newUserForm(){
-  return `<div class="field"><label>Nombre y apellido</label><input name="full_name" required></div>
-  <div class="field"><label>Email</label><input name="email" type="email" required></div>
-  <div class="field"><label>Contraseña inicial</label><input name="password" type="text" minlength="6" required placeholder="Mínimo 6 caracteres"><div style="font-size:.72rem;color:var(--muted);margin-top:5px">Esta será la contraseña con la que el usuario ingresará por primera vez.</div></div>
-  <div class="field"><label>Rol</label><select name="role"><option value="student">Alumno</option><option value="teacher">Profesor</option></select></div>
-  <div class="field"><label>Cursos</label><div class="course-check-grid">${state.courses.map(c=>`<label class="course-check"><input type="checkbox" name="course_ids" value="${c.id}"><span><strong>${esc(c.name)}</strong><small>${esc(c.code||"")}</small></span></label>`).join("")}</div></div>
-  <div class="notice">Elegí una contraseña inicial de al menos 6 caracteres. Después podés enviársela al alumno o profesor junto con su email.</div>`;
-}
-function showCreatedUser(result){
- const w=document.createElement("div");w.className="modal-backdrop";
- w.innerHTML=`<div class="modal-card"><div class="modal-head"><h2>Usuario creado</h2><button class="modal-close">×</button></div>
- <div class="credential"><span>Nombre</span><strong>${esc(result.user.full_name)}</strong></div>
- <div class="credential"><span>Email</span><strong>${esc(result.user.email)}</strong></div>
- <p class="credential-help">La cuenta ya está activa y puede ingresar con el email y la contraseña inicial que acabás de definir.</p>
- <div class="modal-actions"><button class="primary done">Listo</button></div></div>`;
- document.body.appendChild(w);const close=()=>w.remove();w.querySelector(".modal-close").onclick=close;w.querySelector(".done").onclick=close;
-}
+
+
+
 async function usersHTML(){
   if(!isAdmin())return `<div class="empty">Sin permiso.</div>`;
-  const {data:profiles,error}=await sb.from("profiles").select("id,full_name,role,avatar_key,created_at").order("created_at");
-  if(error)return `<div class="empty">No se pudieron cargar usuarios.</div>`;
+
+  const {data:profiles,error}=await sb
+    .from("profiles")
+    .select("id,full_name,role,avatar_key,created_at")
+    .order("created_at");
+
+  if(error)return `<div class="empty">No se pudieron cargar los usuarios.</div>`;
+
   const {data:rows}=await sb.from("course_members").select("user_id,course_id");
-  const memberships={};(rows||[]).forEach(r=>{memberships[r.user_id]??=[];memberships[r.user_id].push(r.course_id);});
-  return `<div class="hero"><div><div class="brand-kicker" style="color:#7b0826">Administración</div><h1>Usuarios y accesos</h1><p>Creá alumnos y profesores, asignales cursos y administrá sus cuentas.</p></div><button class="primary" id="newUserBtn">+ Nuevo usuario</button></div>
-  <section class="user-admin-grid">${profiles.map(p=>`<article class="user-admin-card"><div class="user-admin-head">${avatarHTML(p.avatar_key,p.full_name,"user-admin-avatar")}<div class="user-admin-name"><strong>${esc(p.full_name)}</strong><span>${roleName(p.role)}</span></div>${p.role==="admin"?`<span class="tag">Protegido</span>`:`<button class="danger mini delete-user" data-user="${p.id}" data-name="${esc(p.full_name)}">Eliminar</button>`}</div>
-  <div class="user-course-access"><div class="user-course-label">Cursos habilitados</div>${state.courses.map(c=>`<label class="course-check compact"><input class="membership-check" type="checkbox" data-user="${p.id}" data-course="${c.id}" ${(memberships[p.id]||[]).includes(c.id)?"checked":""}><span><strong>${esc(c.name)}</strong><small>${esc(c.code||"")}</small></span></label>`).join("")}</div></article>`).join("")}</section>`;
+  const memberships={};
+  (rows||[]).forEach(r=>{
+    memberships[r.user_id]??=[];
+    memberships[r.user_id].push(r.course_id);
+  });
+
+  const order={admin:0,teacher:1,student:2};
+  const sorted=[...(profiles||[])].sort((a,b)=>{
+    const roleDiff=(order[a.role]??9)-(order[b.role]??9);
+    if(roleDiff!==0)return roleDiff;
+    return (a.full_name||"").localeCompare(b.full_name||"","es");
+  });
+
+  const renderUserCard=(p)=> {
+    const userCourses=state.courses.filter(c=>(memberships[p.id]||[]).includes(c.id));
+    const courseSummary=userCourses.length
+      ? userCourses.slice(0,2).map(c=>esc(c.code||c.name)).join(" · ") + (userCourses.length>2?` +${userCourses.length-2}`:"")
+      : "Sin cursos asignados";
+
+    return `<article class="user-mini-card" data-user-search="${esc((p.full_name||"").toLowerCase())}">
+      <button class="user-mini-main user-toggle-access" data-user="${p.id}" type="button">
+        ${avatarHTML(p.avatar_key,p.full_name,"user-mini-avatar")}
+        <span class="user-mini-copy">
+          <strong>${esc(p.full_name)}</strong>
+          <small>${esc(courseSummary)}</small>
+        </span>
+        <span class="user-chevron">⌄</span>
+      </button>
+      <div class="user-access-panel" data-access-panel="${p.id}">
+        <div class="user-access-title">Cursos habilitados</div>
+        ${state.courses.length
+          ? state.courses.map(c=>`<label class="course-check compact">
+              <input class="membership-check" type="checkbox" data-user="${p.id}" data-course="${c.id}" ${(memberships[p.id]||[]).includes(c.id)?"checked":""}>
+              <span><strong>${esc(c.name)}</strong><small>${esc(c.code||"")}</small></span>
+            </label>`).join("")
+          : `<div class="empty compact-empty">No hay cursos activos.</div>`}
+      </div>
+    </article>`;
+  };
+
+  const group=(role,title,subtitle)=>{
+    const items=sorted.filter(p=>p.role===role);
+    return `<section class="user-role-section" data-role-section="${role}">
+      <div class="user-role-heading">
+        <div><h2>${title}</h2><p>${subtitle}</p></div>
+        <span class="user-count">${items.length}</span>
+      </div>
+      <div class="user-mini-grid">
+        ${items.length?items.map(renderUserCard).join(""):`<div class="empty">No hay usuarios en esta categoría.</div>`}
+      </div>
+    </section>`;
+  };
+
+  return `<div class="hero user-hero">
+    <div>
+      <div class="brand-kicker" style="color:#7b0826">Administración</div>
+      <h1>Usuarios y accesos</h1>
+      <p>Buscá rápidamente personas y administrá los cursos a los que tienen acceso. Las cuentas nuevas se crean directamente desde Supabase.</p>
+    </div>
+  </div>
+
+  <div class="user-search-wrap">
+    <span class="user-search-icon">⌕</span>
+    <input id="userSearch" type="search" placeholder="Buscar usuario por nombre..." autocomplete="off">
+    <button id="clearUserSearch" class="user-search-clear hidden" type="button">×</button>
+  </div>
+  <div id="userSearchStatus" class="user-search-status"></div>
+
+  <div id="userDirectory">
+    ${group("admin","Administradores","Control total del Aula Virtual")}
+    ${group("teacher","Profesores","Equipo docente y cursos asignados")}
+    ${group("student","Alumnos","Usuarios inscriptos en cursos")}
+  </div>`;
 }
 
 function manageModuleHTML(c,m,i){
@@ -474,19 +549,39 @@ function bindContent(){
 
   document.querySelectorAll(".membership-check").forEach(ch=>ch.onchange=async()=>{const user_id=ch.dataset.user,course_id=Number(ch.dataset.course);ch.disabled=true;let error;if(ch.checked)({error}=await sb.from("course_members").insert({user_id,course_id}));else({error}=await sb.from("course_members").delete().eq("user_id",user_id).eq("course_id",course_id));ch.disabled=false;if(error){ch.checked=!ch.checked;toast(error.message,true);}else toast("Acceso actualizado");});
 
-  const newUserBtn=document.getElementById("newUserBtn");
-  if(newUserBtn)newUserBtn.onclick=()=>showModal("Nuevo usuario",newUserForm(),async fd=>{
-    try{
-      const result=await callManageUsers({action:"create_user",full_name:String(fd.get("full_name")||"").trim(),email:String(fd.get("email")||"").trim(),password:String(fd.get("password")||"").trim(),role:String(fd.get("role")||"student"),course_ids:fd.getAll("course_ids").map(Number)});
-      toast("Usuario creado");setTimeout(()=>showCreatedUser(result),100);renderShell();return true;
-    }catch(err){toast(err.message||"No se pudo crear el usuario",true);return false;}
+  document.querySelectorAll(".user-toggle-access").forEach(btn=>btn.onclick=()=>{
+    const id=btn.dataset.user;
+    const panel=document.querySelector(`[data-access-panel="${id}"]`);
+    const card=btn.closest(".user-mini-card");
+    const wasOpen=card?.classList.contains("open");
+    document.querySelectorAll(".user-mini-card.open").forEach(x=>x.classList.remove("open"));
+    document.querySelectorAll(".user-access-panel.open").forEach(x=>x.classList.remove("open"));
+    if(!wasOpen){card?.classList.add("open");panel?.classList.add("open");}
   });
-  document.querySelectorAll(".delete-user").forEach(btn=>btn.onclick=async()=>{
-    const name=btn.dataset.name||"este usuario";
-    if(!confirm(`¿Eliminar definitivamente a ${name}?\n\nPerderá el acceso al Aula Virtual.`))return;
-    try{await callManageUsers({action:"delete_user",user_id:btn.dataset.user});toast("Usuario eliminado");renderShell();}
-    catch(err){toast(err.message||"No se pudo eliminar el usuario",true);}
-  });
+
+  const userSearch=document.getElementById("userSearch");
+  const clearUserSearch=document.getElementById("clearUserSearch");
+  const searchStatus=document.getElementById("userSearchStatus");
+  if(userSearch){
+    const runUserSearch=()=>{
+      const term=userSearch.value.trim().toLowerCase();
+      let visible=0;
+      document.querySelectorAll(".user-mini-card").forEach(card=>{
+        const match=!term || (card.dataset.userSearch||"").includes(term);
+        card.classList.toggle("search-hidden",!match);
+        if(match)visible++;
+      });
+      document.querySelectorAll(".user-role-section").forEach(section=>{
+        const hasVisible=[...section.querySelectorAll(".user-mini-card")].some(c=>!c.classList.contains("search-hidden"));
+        section.classList.toggle("search-hidden",!hasVisible && !!term);
+      });
+      clearUserSearch?.classList.toggle("hidden",!term);
+      if(searchStatus)searchStatus.textContent=term?`${visible} resultado${visible===1?"":"s"}`:"";
+    };
+    userSearch.oninput=runUserSearch;
+    clearUserSearch.onclick=()=>{userSearch.value="";runUserSearch();userSearch.focus();};
+  }
+
 
   const nc=document.getElementById("newCourse");if(nc)nc.onclick=()=>showModal("Nuevo curso",courseForm(),async fd=>{const p=Object.fromEntries(fd);if(!p.cover_image_url)delete p.cover_image_url;const {error}=await sb.from("courses").insert({...p,is_active:true});if(error){toast(error.message,true);return false;}await loadCourses();toast("Curso creado");renderShell();});
   document.querySelectorAll(".edit-course").forEach(b=>b.onclick=()=>{const course=state.courses.find(x=>String(x.id)===b.dataset.course);showModal("Editar curso",courseForm(course),async fd=>{const p=Object.fromEntries(fd);if(!p.cover_image_url)p.cover_image_url=null;const {error}=await sb.from("courses").update(p).eq("id",course.id);if(error){toast(error.message,true);return false;}await loadCourses();toast("Curso actualizado");renderShell();});});
