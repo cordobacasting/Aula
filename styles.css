@@ -1,0 +1,108 @@
+
+:root{
+  --bg:#f2efe9; --paper:#fffdf9; --ink:#171717; --muted:#77726a;
+  --line:#ddd7cd; --soft:#ebe5dc; --shadow:0 18px 45px rgba(0,0,0,.07);
+  --admin:#1f1f1f; --teacher:#5f4f7a; --student:#4d6c61;
+}
+*{box-sizing:border-box}
+html,body{margin:0;min-height:100%;font-family:"DM Sans",sans-serif;background:var(--bg);color:var(--ink)}
+button,input,select,textarea{font:inherit}
+button{cursor:pointer}
+a{color:inherit}
+.hidden{display:none!important}
+.shell{min-height:100vh}
+.login-page{min-height:100vh;display:grid;grid-template-columns:1.05fr .95fr}
+.login-brand{padding:58px;display:flex;flex-direction:column;justify-content:space-between;background:#171717;color:#fff}
+.brand-kicker{font-size:.75rem;letter-spacing:.16em;font-weight:800}
+.login-brand h1{font:800 clamp(3.2rem,7vw,7.5rem)/.88 "Manrope";letter-spacing:-.07em;margin:20px 0}
+.login-brand p{max-width:560px;color:#c9c5be;font-size:1.08rem}
+.login-panel{padding:42px;display:flex;align-items:center;justify-content:center}
+.login-card{width:min(460px,100%);background:var(--paper);border:1px solid var(--line);border-radius:26px;padding:32px;box-shadow:var(--shadow)}
+.login-card h2{font:800 2rem/1 "Manrope";letter-spacing:-.04em;margin:0 0 8px}
+.login-card>p{color:var(--muted);margin:0 0 24px}
+.field{display:grid;gap:7px;margin:14px 0}
+.field label{font-size:.82rem;font-weight:700}
+.field input,.field select,.field textarea{border:1px solid var(--line);border-radius:12px;background:#fff;padding:12px 13px;outline:none}
+.field textarea{min-height:110px;resize:vertical}
+.primary{border:0;background:#171717;color:white;padding:12px 16px;border-radius:12px;font-weight:700}
+.secondary{border:1px solid var(--line);background:var(--paper);padding:10px 13px;border-radius:11px}
+.login-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:18px}
+.demo-users{margin-top:24px;border-top:1px solid var(--line);padding-top:18px}
+.demo-users p{font-size:.78rem;color:var(--muted);margin:0 0 8px}
+.demo-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:7px}
+.demo{border:1px solid var(--line);background:var(--soft);border-radius:10px;padding:9px;font-size:.75rem}
+.topbar{height:72px;border-bottom:1px solid var(--line);background:rgba(255,253,249,.95);display:flex;align-items:center;justify-content:space-between;padding:0 26px;position:sticky;top:0;z-index:20}
+.topbar-left{display:flex;align-items:center;gap:16px}
+.logo{font:800 1rem "Manrope";letter-spacing:-.03em}
+.role-badge{font-size:.68rem;font-weight:800;letter-spacing:.08em;text-transform:uppercase;padding:6px 9px;border-radius:999px;background:#ece7df}
+.userbox{display:flex;align-items:center;gap:12px}
+.avatar{width:36px;height:36px;border-radius:50%;display:grid;place-items:center;background:#171717;color:white;font-weight:800}
+.layout{display:grid;grid-template-columns:250px 1fr;min-height:calc(100vh - 72px)}
+.sidebar{border-right:1px solid var(--line);padding:22px 14px;background:#eee9e2}
+.nav-section{margin-bottom:26px}
+.nav-title{font-size:.68rem;text-transform:uppercase;letter-spacing:.12em;color:var(--muted);font-weight:800;padding:0 10px 8px}
+.nav-item{display:flex;align-items:center;gap:10px;width:100%;border:0;background:transparent;padding:10px;border-radius:10px;text-align:left;margin:2px 0}
+.nav-item:hover,.nav-item.active{background:var(--paper)}
+.nav-item span:first-child{width:20px}
+.content{padding:34px;max-width:1500px;width:100%;margin:0 auto}
+.hero{display:flex;justify-content:space-between;align-items:flex-end;gap:24px;margin-bottom:28px}
+.hero h1{font:800 clamp(2.3rem,5vw,4.6rem)/.92 "Manrope";letter-spacing:-.06em;margin:0}
+.hero p{color:var(--muted);margin:12px 0 0}
+.grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px}
+.course-card{background:var(--paper);border:1px solid var(--line);border-radius:20px;overflow:hidden;box-shadow:0 10px 28px rgba(0,0,0,.04)}
+.course-cover{height:120px;padding:18px;color:white;display:flex;justify-content:space-between;align-items:flex-start}
+.course-code{font-size:.7rem;font-weight:800;letter-spacing:.1em;text-transform:uppercase;opacity:.9}
+.course-body{padding:18px}
+.course-body h3{font:800 1.25rem/1.05 "Manrope";margin:0 0 8px;letter-spacing:-.035em}
+.course-body p{font-size:.84rem;color:var(--muted);min-height:42px}
+.progress{height:7px;background:#ece7df;border-radius:999px;overflow:hidden;margin:16px 0 7px}
+.progress span{display:block;height:100%;background:#171717}
+.meta{display:flex;justify-content:space-between;color:var(--muted);font-size:.74rem}
+.course-actions{display:flex;gap:8px;margin-top:15px}
+.course-actions button{flex:1}
+.stats{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:28px}
+.stat{background:var(--paper);border:1px solid var(--line);border-radius:17px;padding:18px}
+.stat strong{display:block;font:800 1.8rem "Manrope"}
+.stat span{font-size:.78rem;color:var(--muted)}
+.panel{background:var(--paper);border:1px solid var(--line);border-radius:20px;padding:22px;margin-bottom:18px}
+.panel-head{display:flex;justify-content:space-between;align-items:center;gap:15px;margin-bottom:14px}
+.panel-head h2{font:800 1.35rem "Manrope";margin:0;letter-spacing:-.035em}
+.module{border:1px solid var(--line);border-radius:16px;margin:11px 0;overflow:hidden;background:#fff}
+.module-head{padding:16px;display:flex;justify-content:space-between;align-items:center;background:#f4f0ea}
+.module-title{display:flex;gap:12px;align-items:center}
+.module-number{width:34px;height:34px;border-radius:10px;background:#171717;color:#fff;display:grid;place-items:center;font-weight:800;font-size:.82rem}
+.lesson{display:grid;grid-template-columns:34px 1fr auto;gap:12px;align-items:center;padding:14px 16px;border-top:1px solid var(--line)}
+.lesson-index{color:var(--muted);font-size:.76rem}
+.lesson h4{margin:0 0 3px;font-size:.93rem}
+.lesson p{margin:0;color:var(--muted);font-size:.76rem}
+.lesson-type{font-size:.69rem;font-weight:800;text-transform:uppercase;letter-spacing:.07em;background:#ece7df;padding:5px 7px;border-radius:999px}
+.lesson-view{border:0;background:transparent;font-weight:700}
+.breadcrumb{font-size:.78rem;color:var(--muted);margin-bottom:12px}
+.video-frame{aspect-ratio:16/9;width:100%;border:0;border-radius:16px;background:#111}
+.material-box{border:1px dashed #bbb2a6;border-radius:16px;padding:24px;text-align:center;background:#faf8f4}
+.admin-grid{display:grid;grid-template-columns:1.15fr .85fr;gap:18px}
+.table{width:100%;border-collapse:collapse}
+.table th,.table td{padding:12px 10px;border-top:1px solid var(--line);text-align:left;font-size:.82rem}
+.table th{font-size:.7rem;text-transform:uppercase;letter-spacing:.08em;color:var(--muted)}
+.tag{display:inline-block;padding:5px 8px;border-radius:999px;background:#ece7df;font-size:.7rem;font-weight:800}
+.empty{padding:28px;text-align:center;color:var(--muted);border:1px dashed var(--line);border-radius:16px}
+.notice{padding:13px 15px;border-radius:12px;background:#ece7df;font-size:.82rem}
+.teacher-note{border-left:4px solid var(--teacher)}
+.toast{position:fixed;right:22px;bottom:22px;background:#171717;color:#fff;padding:13px 16px;border-radius:12px;box-shadow:var(--shadow);z-index:50}
+@media(max-width:1000px){
+ .grid{grid-template-columns:repeat(2,1fr)}
+ .stats{grid-template-columns:repeat(2,1fr)}
+ .admin-grid{grid-template-columns:1fr}
+}
+@media(max-width:760px){
+ .login-page{grid-template-columns:1fr}
+ .login-brand{min-height:42vh;padding:32px}
+ .login-panel{padding:18px}
+ .layout{grid-template-columns:1fr}
+ .sidebar{display:none}
+ .content{padding:22px 16px}
+ .grid,.stats{grid-template-columns:1fr}
+ .topbar{padding:0 14px}
+ .role-badge{display:none}
+ .hero{align-items:flex-start;flex-direction:column}
+}
