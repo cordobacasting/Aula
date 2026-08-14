@@ -1,0 +1,6 @@
+V5 - Gestión de usuarios
+La Edge Function manage-users ya debe estar desplegada.
+Subí/reemplazá estos archivos en la raíz de main de GitHub.
+No hace falta ejecutar SQL nuevo.
+Luego esperá el deploy de Pages y hacé Ctrl+Shift+R.
+Como admin: Usuarios y accesos → + Nuevo usuario.

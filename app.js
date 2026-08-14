@@ -350,11 +350,39 @@ async function adminHTML(){
   const [{count:pc},{count:mc},{count:lc}]=await Promise.all([sb.from("profiles").select("*",{count:"exact",head:true}),sb.from("modules").select("*",{count:"exact",head:true}),sb.from("lessons").select("*",{count:"exact",head:true})]);
   return `<div class="hero"><div><div class="brand-kicker" style="color:#7b0826">Administración</div><h1>Panel general</h1><p>Vista rápida del Aula Virtual de Córdoba Casting.</p></div></div><section class="stats"><div class="stat"><strong>${pc??"—"}</strong><span>usuarios</span></div><div class="stat"><strong>${state.courses.length}</strong><span>cursos activos</span></div><div class="stat"><strong>${mc??"—"}</strong><span>módulos</span></div><div class="stat"><strong>${lc??"—"}</strong><span>contenidos</span></div></section><div class="admin-grid"><section class="panel"><div class="panel-head"><h2>Gestión</h2></div><div class="login-actions"><button class="secondary" data-viewjump="users">Usuarios y accesos</button><button class="secondary" data-viewjump="manage">Cursos y contenido</button></div></section><section class="panel"><div class="panel-head"><h2>Permisos</h2></div><p style="font-size:.86rem;color:var(--muted)">Los profesores pueden editar sus cursos, módulos y contenidos, y subir material. Sólo el administrador puede crear o eliminar cursos.</p></section></div>`;
 }
+
+async function callManageUsers(payload){
+  const {data,error}=await sb.functions.invoke("manage-users",{body:payload});
+  if(error) throw new Error(error.message||"No se pudo realizar la operación.");
+  if(data?.error) throw new Error(data.error);
+  return data;
+}
+function newUserForm(){
+  return `<div class="field"><label>Nombre y apellido</label><input name="full_name" required></div>
+  <div class="field"><label>Email</label><input name="email" type="email" required></div>
+  <div class="field"><label>Rol</label><select name="role"><option value="student">Alumno</option><option value="teacher">Profesor</option></select></div>
+  <div class="field"><label>Cursos</label><div class="course-check-grid">${state.courses.map(c=>`<label class="course-check"><input type="checkbox" name="course_ids" value="${c.id}"><span><strong>${esc(c.name)}</strong><small>${esc(c.code||"")}</small></span></label>`).join("")}</div></div>
+  <div class="notice">Se generará una contraseña temporal y se mostrará una sola vez al terminar.</div>`;
+}
+function showCreatedUser(result){
+ const creds=`Email: ${result.user.email}\nContraseña temporal: ${result.temporary_password}`;
+ const w=document.createElement("div");w.className="modal-backdrop";
+ w.innerHTML=`<div class="modal-card"><div class="modal-head"><h2>Usuario creado</h2><button class="modal-close">×</button></div>
+ <div class="credential"><span>Email</span><strong>${esc(result.user.email)}</strong></div>
+ <div class="credential"><span>Contraseña temporal</span><strong class="credential-password">${esc(result.temporary_password)}</strong></div>
+ <p class="credential-help">Copiá estos datos ahora.</p><div class="modal-actions"><button class="secondary copy-access">Copiar acceso</button><button class="primary done">Listo</button></div></div>`;
+ document.body.appendChild(w);const close=()=>w.remove();w.querySelector(".modal-close").onclick=close;w.querySelector(".done").onclick=close;
+ w.querySelector(".copy-access").onclick=async()=>{try{await navigator.clipboard.writeText(creds);toast("Acceso copiado");}catch{toast("No se pudo copiar",true);}};
+}
 async function usersHTML(){
   if(!isAdmin())return `<div class="empty">Sin permiso.</div>`;
-  const {data:profiles,error}=await sb.from("profiles").select("id,full_name,role,created_at").order("created_at");if(error)return `<div class="empty">No se pudieron cargar usuarios.</div>`;
-  const {data:rows}=await sb.from("course_members").select("user_id,course_id");const memberships={};(rows||[]).forEach(r=>{memberships[r.user_id]??=[];memberships[r.user_id].push(r.course_id);});
-  return `<div class="hero"><div><div class="brand-kicker" style="color:#7b0826">Administración</div><h1>Usuarios y accesos</h1><p>Asigná cursos a usuarios existentes.</p></div></div><div class="notice" style="margin-bottom:18px">Las cuentas nuevas todavía se crean desde Supabase → Authentication → Users. Después podés asignarlas desde acá.</div><section class="panel">${profiles.map(p=>`<div class="module"><div class="module-head"><div><strong>${esc(p.full_name)}</strong><div style="font-size:.75rem;color:var(--muted)">${roleName(p.role)}</div></div></div><div style="padding:14px 16px">${state.courses.map(c=>`<label style="display:flex;gap:8px;align-items:center;margin:8px 0;font-size:.85rem"><input class="membership-check" type="checkbox" data-user="${p.id}" data-course="${c.id}" ${(memberships[p.id]||[]).includes(c.id)?"checked":""}>${esc(c.name)} · ${esc(c.code||"")}</label>`).join("")}</div></div>`).join("")}</section>`;
+  const {data:profiles,error}=await sb.from("profiles").select("id,full_name,role,avatar_key,created_at").order("created_at");
+  if(error)return `<div class="empty">No se pudieron cargar usuarios.</div>`;
+  const {data:rows}=await sb.from("course_members").select("user_id,course_id");
+  const memberships={};(rows||[]).forEach(r=>{memberships[r.user_id]??=[];memberships[r.user_id].push(r.course_id);});
+  return `<div class="hero"><div><div class="brand-kicker" style="color:#7b0826">Administración</div><h1>Usuarios y accesos</h1><p>Creá alumnos y profesores, asignales cursos y administrá sus cuentas.</p></div><button class="primary" id="newUserBtn">+ Nuevo usuario</button></div>
+  <section class="user-admin-grid">${profiles.map(p=>`<article class="user-admin-card"><div class="user-admin-head">${avatarHTML(p.avatar_key,p.full_name,"user-admin-avatar")}<div class="user-admin-name"><strong>${esc(p.full_name)}</strong><span>${roleName(p.role)}</span></div>${p.role==="admin"?`<span class="tag">Protegido</span>`:`<button class="danger mini delete-user" data-user="${p.id}" data-name="${esc(p.full_name)}">Eliminar</button>`}</div>
+  <div class="user-course-access"><div class="user-course-label">Cursos habilitados</div>${state.courses.map(c=>`<label class="course-check compact"><input class="membership-check" type="checkbox" data-user="${p.id}" data-course="${c.id}" ${(memberships[p.id]||[]).includes(c.id)?"checked":""}><span><strong>${esc(c.name)}</strong><small>${esc(c.code||"")}</small></span></label>`).join("")}</div></article>`).join("")}</section>`;
 }
 
 function manageModuleHTML(c,m,i){
@@ -445,6 +473,20 @@ function bindContent(){
   document.querySelectorAll(".reply-form").forEach(f=>f.onsubmit=async e=>{e.preventDefault();const fd=new FormData(e.target);const body=fd.get("body");const link_url=fd.get("link_url")?.trim()||null;const courseId=Number(e.target.dataset.course);const {error}=await sb.from("forum_replies").insert({thread_id:Number(e.target.dataset.thread),user_id:state.user.id,body,link_url});if(error){toast("No se pudo responder: "+error.message,true);return;}delete state.forum[courseId];toast("Respuesta publicada");renderShell();});
 
   document.querySelectorAll(".membership-check").forEach(ch=>ch.onchange=async()=>{const user_id=ch.dataset.user,course_id=Number(ch.dataset.course);ch.disabled=true;let error;if(ch.checked)({error}=await sb.from("course_members").insert({user_id,course_id}));else({error}=await sb.from("course_members").delete().eq("user_id",user_id).eq("course_id",course_id));ch.disabled=false;if(error){ch.checked=!ch.checked;toast(error.message,true);}else toast("Acceso actualizado");});
+
+  const newUserBtn=document.getElementById("newUserBtn");
+  if(newUserBtn)newUserBtn.onclick=()=>showModal("Nuevo usuario",newUserForm(),async fd=>{
+    try{
+      const result=await callManageUsers({action:"create_user",full_name:String(fd.get("full_name")||"").trim(),email:String(fd.get("email")||"").trim(),role:String(fd.get("role")||"student"),course_ids:fd.getAll("course_ids").map(Number)});
+      toast("Usuario creado");setTimeout(()=>showCreatedUser(result),100);renderShell();return true;
+    }catch(err){toast(err.message||"No se pudo crear el usuario",true);return false;}
+  });
+  document.querySelectorAll(".delete-user").forEach(btn=>btn.onclick=async()=>{
+    const name=btn.dataset.name||"este usuario";
+    if(!confirm(`¿Eliminar definitivamente a ${name}?\n\nPerderá el acceso al Aula Virtual.`))return;
+    try{await callManageUsers({action:"delete_user",user_id:btn.dataset.user});toast("Usuario eliminado");renderShell();}
+    catch(err){toast(err.message||"No se pudo eliminar el usuario",true);}
+  });
 
   const nc=document.getElementById("newCourse");if(nc)nc.onclick=()=>showModal("Nuevo curso",courseForm(),async fd=>{const p=Object.fromEntries(fd);if(!p.cover_image_url)delete p.cover_image_url;const {error}=await sb.from("courses").insert({...p,is_active:true});if(error){toast(error.message,true);return false;}await loadCourses();toast("Curso creado");renderShell();});
   document.querySelectorAll(".edit-course").forEach(b=>b.onclick=()=>{const course=state.courses.find(x=>String(x.id)===b.dataset.course);showModal("Editar curso",courseForm(course),async fd=>{const p=Object.fromEntries(fd);if(!p.cover_image_url)p.cover_image_url=null;const {error}=await sb.from("courses").update(p).eq("id",course.id);if(error){toast(error.message,true);return false;}await loadCourses();toast("Curso actualizado");renderShell();});});
