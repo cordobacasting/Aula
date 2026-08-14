@@ -32,8 +32,9 @@ body{background:
 .login-brand{
   padding:58px;display:flex;flex-direction:column;justify-content:space-between;color:white;
   background:
-    linear-gradient(135deg,rgba(76,0,21,.93),rgba(118,80,200,.73)),
-    url("assets/curso_actuacion_1.png") center/cover;
+    radial-gradient(circle at 18% 18%,rgba(255,255,255,.08),transparent 22rem),
+    radial-gradient(circle at 85% 78%,rgba(163,122,232,.20),transparent 26rem),
+    linear-gradient(135deg,#4d0015 0%,#7b0826 48%,#7650c8 100%);
   position:relative;overflow:hidden
 }
 .login-brand:after{
@@ -225,4 +226,14 @@ body{background:
   .forum-thread{padding:15px}
   .reply-form{flex-direction:column}
   .reply-form button{align-self:stretch}
+}
+
+/* PDF VIEWER */
+.pdf-shell{background:#171214;border-radius:18px;overflow:hidden;border:1px solid #2a2225}
+.pdf-toolbar{min-height:56px;padding:10px 14px;display:flex;justify-content:space-between;align-items:center;gap:12px;background:#171214;color:white}
+.pdf-toolbar .secondary{background:white;color:var(--wine-dark);border:0;text-decoration:none}
+.pdf-frame{display:block;width:100%;height:min(78vh,980px);min-height:650px;border:0;background:#4a4547}
+@media(max-width:760px){
+  .pdf-toolbar{align-items:flex-start;flex-direction:column}
+  .pdf-frame{height:72vh;min-height:500px}
 }

@@ -1,67 +1,47 @@
-# Aula Virtual Córdoba Casting · Rediseño de marca
+# Aula Virtual Córdoba Casting · V3 con PDF
 
-## Antes de subir esta versión a GitHub
+Esta versión contiene TODO lo de la versión anterior más:
 
-En Supabase:
-1. Abrí **SQL Editor → New query**.
-2. Pegá el contenido de `supabase_migracion.sql`.
-3. Ejecutá **Run**.
-4. Cuando aparezca Success, recién entonces reemplazá los archivos del repositorio de GitHub por los de esta carpeta.
+- Login con fondo degradado, sin fotografía promocional.
+- Foro bidireccional:
+  - alumnos, profesores y admin pueden abrir instancias;
+  - todos los miembros del curso pueden responder;
+  - sirve para preguntas, consignas y entregas mediante links.
+- PDF como contenido nativo:
+  - admin/profesor selecciona un PDF desde su computadora;
+  - se sube a Supabase Storage;
+  - el alumno lo lee dentro de la página;
+  - tiene botón para descargarlo;
+  - el bucket es privado y requiere acceso al curso.
 
-## Cambios incluidos
+## IMPORTANTE: orden de actualización
 
-### Identidad visual
-- Paleta principal bordó/rojo oscuro + negro.
-- Violeta como acento secundario.
-- Dorado usado sólo en llamadas de atención.
-- Logo real de Córdoba Casting.
-- Portadas basadas en las piezas gráficas proporcionadas.
-- Los cursos sin una pieza específica usan un fondo de marca automáticamente.
-- Se puede definir una portada personalizada desde “Editar curso” pegando una URL.
+Si YA ejecutaste `supabase_migracion.sql` de la versión de marca:
+1. Abrí Supabase → SQL Editor → New query.
+2. Pegá y ejecutá SOLO `supabase_v3_pdf.sql`.
+   - Este archivo YA incluye el ajuste del foro V2.
+   - No necesitás ejecutar `supabase_foro_v2.sql`.
 
-### Permisos
-Administrador:
-- Crear, editar y eliminar cursos.
-- Crear, editar y eliminar módulos.
-- Crear, editar y eliminar contenidos.
-- Gestionar usuarios y accesos.
-- Responder en foros.
+Si todavía NO ejecutaste nunca `supabase_migracion.sql`:
+1. Ejecutá `supabase_migracion.sql`.
+2. Después ejecutá `supabase_v3_pdf.sql`.
 
-Profesor:
-- Ver sólo cursos asignados.
-- Editar datos de esos cursos.
-- Editar módulos existentes.
-- Subir contenido.
-- Editar contenido existente.
-- NO crear cursos.
-- NO eliminar cursos.
-- NO eliminar módulos ni contenidos.
-- Responder consultas del foro.
+Cuando ambos correspondan y den Success:
+3. Reemplazá en GitHub los archivos por los de esta V3.
+4. Esperá el deployment de Pages.
+5. Hacé Ctrl + Shift + R.
 
-Alumno:
-- Ver sólo sus cursos.
-- Ver módulos y contenido.
-- Crear preguntas o compartir links en el foro.
-- NO responder consultas.
+## PDF
 
-### Foro
-Cada curso tiene dos pestañas:
-- Módulos y contenido
-- Foro del curso
+El bucket se llama `course-pdfs`, es privado y acepta solamente `application/pdf`.
+Límite configurado: 50 MB por archivo.
 
-Los alumnos crean consultas. Profesores y administradores responden.
+Los PDFs se guardan con esta estructura:
+`ID_CURSO/ID_MODULO/timestamp-nombre.pdf`
 
-### Mobile
-- Menú lateral deslizable.
-- Tarjetas a una columna.
-- Formularios, contenidos y foro adaptados a pantallas pequeñas.
+La web crea una URL firmada temporal cuando un usuario autorizado abre el PDF.
 
-## Archivos nuevos
-- `assets/logo.png`
-- `assets/curso_actuacion_1.png`
-- `assets/curso_actuacion_2.png`
-- `assets/curso_direccion.png`
-- `supabase_migracion.sql`
+## Seguridad
 
-## Importante
-No borres `supabase-config.js`. Sigue conectado al proyecto actual.
+La Publishable Key continúa siendo la única clave presente en frontend.
+No se agrega ninguna Secret Key ni service_role.
