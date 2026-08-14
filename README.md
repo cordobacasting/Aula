@@ -1,33 +1,67 @@
-# Aula Virtual Córdoba Casting — Supabase
+# Aula Virtual Córdoba Casting · Rediseño de marca
 
-Esta versión ya está conectada a tu proyecto real de Supabase.
+## Antes de subir esta versión a GitHub
 
-## Para probar
-No abras el HTML con doble clic. Servilo con un servidor local o publicalo.
+En Supabase:
+1. Abrí **SQL Editor → New query**.
+2. Pegá el contenido de `supabase_migracion.sql`.
+3. Ejecutá **Run**.
+4. Cuando aparezca Success, recién entonces reemplazá los archivos del repositorio de GitHub por los de esta carpeta.
 
-En esta carpeta:
-python -m http.server 8000
+## Cambios incluidos
 
-Luego abrí:
-http://localhost:8000
+### Identidad visual
+- Paleta principal bordó/rojo oscuro + negro.
+- Violeta como acento secundario.
+- Dorado usado sólo en llamadas de atención.
+- Logo real de Córdoba Casting.
+- Portadas basadas en las piezas gráficas proporcionadas.
+- Los cursos sin una pieza específica usan un fondo de marca automáticamente.
+- Se puede definir una portada personalizada desde “Editar curso” pegando una URL.
 
-Entrá con el usuario administrador real que creaste en Supabase.
+### Permisos
+Administrador:
+- Crear, editar y eliminar cursos.
+- Crear, editar y eliminar módulos.
+- Crear, editar y eliminar contenidos.
+- Gestionar usuarios y accesos.
+- Responder en foros.
 
-## Ya funciona
-- login real;
-- lectura del rol desde profiles;
-- cursos según RLS;
-- módulos y lessons;
-- profesor puede insertar lessons en sus cursos;
-- administrador puede crear cursos/módulos;
-- administrador puede asignar cursos a usuarios existentes;
-- YouTube embebido y enlaces externos/Drive.
+Profesor:
+- Ver sólo cursos asignados.
+- Editar datos de esos cursos.
+- Editar módulos existentes.
+- Subir contenido.
+- Editar contenido existente.
+- NO crear cursos.
+- NO eliminar cursos.
+- NO eliminar módulos ni contenidos.
+- Responder consultas del foro.
 
-## Alta de usuarios
-Por ahora crealos en Supabase → Authentication → Users → Add user.
-El trigger crea su profile. Después cambiá role a teacher si corresponde y asignale cursos desde el aula.
+Alumno:
+- Ver sólo sus cursos.
+- Ver módulos y contenido.
+- Crear preguntas o compartir links en el foro.
+- NO responder consultas.
 
-Para que el administrador pueda invitar usuarios desde la propia web necesitaremos una Edge Function segura. No pongas una Secret Key/service_role dentro del frontend.
+### Foro
+Cada curso tiene dos pestañas:
+- Módulos y contenido
+- Foro del curso
 
-## Configuración
-`supabase-config.js` contiene únicamente la URL del proyecto y la Publishable Key, ambas destinadas al cliente web cuando RLS está correctamente configurado.
+Los alumnos crean consultas. Profesores y administradores responden.
+
+### Mobile
+- Menú lateral deslizable.
+- Tarjetas a una columna.
+- Formularios, contenidos y foro adaptados a pantallas pequeñas.
+
+## Archivos nuevos
+- `assets/logo.png`
+- `assets/curso_actuacion_1.png`
+- `assets/curso_actuacion_2.png`
+- `assets/curso_direccion.png`
+- `supabase_migracion.sql`
+
+## Importante
+No borres `supabase-config.js`. Sigue conectado al proyecto actual.
