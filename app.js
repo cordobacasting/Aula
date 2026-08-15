@@ -91,6 +91,7 @@ async function boot(){
   const {data:{session}}=await sb.auth.getSession();
   if(!session){renderLogin();return;}
   await loadAuthenticatedUser(session.user);
+  if(new URLSearchParams(window.location.search).get("recovery")==="1")setTimeout(showRecoveryPassword,150);
 }
 async function loadAuthenticatedUser(user){
   state.user=user;
@@ -125,13 +126,14 @@ function renderLogin(){
     <section class="login-panel"><form class="login-card" id="loginForm"><div class="brand-kicker" style="color:#7b0826">Acceso exclusivo</div><h2>Ingresar</h2><p>Usá el email y la contraseña de tu cuenta habilitada.</p>
       <div class="field"><label>Email</label><input id="email" type="email" autocomplete="email" required></div>
       <div class="field"><label>Contraseña</label><input id="password" type="password" autocomplete="current-password" required></div>
-      <button class="primary" id="loginButton" style="width:100%">Entrar al aula</button><div id="loginError" style="margin-top:12px;color:#8b1635;font-size:.82rem"></div></form></section></div>`;
+      <button class="primary" id="loginButton" style="width:100%">Entrar al aula</button><button type="button" class="forgot-password" id="forgotPassword">¿Olvidaste tu contraseña?</button><div id="loginError" style="margin-top:12px;color:#8b1635;font-size:.82rem"></div></form></section></div>`;
   document.getElementById("loginForm").onsubmit=async e=>{
     e.preventDefault();const btn=document.getElementById("loginButton"),box=document.getElementById("loginError");btn.disabled=true;btn.textContent="Ingresando...";box.textContent="";
     const {data,error}=await sb.auth.signInWithPassword({email:document.getElementById("email").value.trim(),password:document.getElementById("password").value});
     if(error){box.textContent="No pudimos iniciar sesión. Revisá email y contraseña.";btn.disabled=false;btn.textContent="Entrar al aula";return;}
     app.innerHTML=loadingHTML("Ingresando...");await loadAuthenticatedUser(data.user);
   };
+  const forgotBtn=document.getElementById("forgotPassword");if(forgotBtn)forgotBtn.onclick=showForgotPassword;
 }
 async function logout(){await sb.auth.signOut();state.user=null;state.profile=null;state.courses=[];state.modules={};state.forum={};state.view="dashboard";renderLogin();}
 
@@ -152,41 +154,149 @@ function sidebarHTML(){
     <button class="nav-item ${state.view==="admin"?"active":""}" data-view="admin"><span>⚙</span><span>Panel general</span></button>
     <button class="nav-item ${state.view==="users"?"active":""}" data-view="users"><span>◎</span><span>Usuarios</span></button>
     <button class="nav-item ${state.view==="manage"?"active":""}" data-view="manage"><span>✎</span><span>Cursos y contenido</span></button></div>`;
-  h+=`<div class="nav-section"><div class="nav-title">Cuenta</div><button class="nav-item" id="logout"><span>↪</span><span>Cerrar sesión</span></button></div>`;
+  
   return h;
 }
 function renderShell(){
   const p=state.profile;
   app.innerHTML=`<div class="shell"><header class="topbar"><div class="topbar-left"><button class="mobile-menu" id="mobileMenu">☰</button><img class="top-logo" src="assets/logo.png"><div class="logo-word">CÓRDOBA CASTING</div><div class="role-badge">${roleName(p.role)}</div></div>
-    <div class="userbox"><div><strong>${esc(p.full_name)}</strong><div style="font-size:.72rem;color:var(--muted)">${esc(state.user.email||"")}</div></div>${avatarHTML(p.avatar_key,p.full_name,"avatar avatar-choice-trigger")}</div></header>
+    <button class="userbox profile-menu-trigger" id="profileMenuTrigger" type="button"><div><strong>${esc(p.full_name)}</strong><div style="font-size:.72rem;color:var(--muted)">${esc(state.user.email||"")}</div></div>${avatarHTML(p.avatar_key,p.full_name,"avatar")}<span class="profile-caret">⌄</span></button><div class="profile-dropdown hidden" id="profileDropdown"><button type="button" id="openMyProfile"><span>◎</span><div><strong>Mi perfil</strong><small>Nombre, avatar y contraseña</small></div></button><div class="profile-dropdown-sep"></div><button type="button" id="topLogout"><span>↪</span><div><strong>Cerrar sesión</strong></div></button></div></header>
     <div class="mobile-drawer-backdrop" id="drawerBackdrop"></div><div class="layout"><aside class="sidebar">${sidebarHTML()}</aside><main class="content" id="content"></main></div></div>`;
   document.querySelectorAll("[data-view]").forEach(b=>b.onclick=()=>{state.view=b.dataset.view;state.courseId=null;state.lessonId=null;state.courseTab="content";document.body.classList.remove("menu-open");renderShell();});
-  document.getElementById("logout").onclick=logout;
+  const sidebarLogout=document.getElementById("logout"); if(sidebarLogout)sidebarLogout.onclick=logout;
   document.getElementById("mobileMenu").onclick=()=>document.body.classList.toggle("menu-open");
   document.getElementById("drawerBackdrop").onclick=()=>document.body.classList.remove("menu-open");
-  document.querySelector(".avatar-choice-trigger")?.addEventListener("click",showAvatarPicker);
+  const profileTrigger=document.getElementById("profileMenuTrigger");
+  const profileDropdown=document.getElementById("profileDropdown");
+  if(profileTrigger && profileDropdown){
+    profileTrigger.onclick=(e)=>{e.stopPropagation();profileDropdown.classList.toggle("hidden");};
+    document.addEventListener("click",(e)=>{if(!profileDropdown.contains(e.target) && !profileTrigger.contains(e.target))profileDropdown.classList.add("hidden");},{once:true});
+  }
+  document.getElementById("openMyProfile")?.addEventListener("click",()=>{profileDropdown?.classList.add("hidden");showMyProfile();});
+  document.getElementById("topLogout")?.addEventListener("click",logout);
   renderContent();
 }
 
 
-function showAvatarPicker(){
-  const current=state.profile.avatar_key||"meryl";
-  const body=`<div class="avatar-picker-grid">${Object.entries(AVATARS).map(([key,a])=>`
+
+function avatarPickerHTML(current){
+  return `<div class="avatar-picker-grid">${Object.entries(AVATARS).map(([key,a])=>`
     <button type="button" class="avatar-option ${current===key?"selected":""}" data-avatar="${key}">
       <img src="${esc(a.image)}" alt="${esc(a.name)}"><span>${esc(a.name)}</span>
-    </button>`).join("")}</div>
-    <p class="avatar-credit-note">Avatares con imágenes de Wikimedia Commons. Tocá un personaje para usarlo como tu ícono dentro del Aula.</p>`;
-  const wrap=document.createElement("div");wrap.className="modal-backdrop";wrap.innerHTML=`<div class="modal-card"><div class="modal-head"><h2>Elegí tu avatar</h2><button class="modal-close">×</button></div>${body}</div>`;
+    </button>`).join("")}</div>`;
+}
+
+function showMyProfile(){
+  const current=state.profile.avatar_key||"meryl";
+  const wrap=document.createElement("div");
+  wrap.className="modal-backdrop";
+  wrap.innerHTML=`<div class="modal-card profile-modal">
+    <div class="modal-head"><div><h2>Mi perfil</h2><p>Personalizá cómo aparecés dentro del Aula.</p></div><button class="modal-close">×</button></div>
+    <form id="profileForm">
+      <div class="profile-summary">${avatarHTML(current,state.profile.full_name,"profile-current-avatar")}<div><strong>${esc(state.profile.full_name)}</strong><span>${esc(state.user.email||"")}</span></div></div>
+      <div class="field"><label>Nombre visible</label><input name="full_name" value="${esc(state.profile.full_name||"")}" minlength="2" maxlength="80" required></div>
+      <div class="field"><label>Email</label><input value="${esc(state.user.email||"")}" disabled><div class="locked-field-note">🔒 El email de acceso es fijo y no se puede modificar desde el Aula.</div></div>
+      <div class="field"><label>Avatar</label>${avatarPickerHTML(current)}<input type="hidden" name="avatar_key" value="${esc(current)}"></div>
+      <div class="profile-section-title">Cambiar contraseña <span>opcional</span></div>
+      <div class="field"><label>Nueva contraseña</label><input name="password" type="password" minlength="6" autocomplete="new-password" placeholder="Dejá vacío si no querés cambiarla"></div>
+      <div class="field"><label>Repetir contraseña</label><input name="password_repeat" type="password" minlength="6" autocomplete="new-password" placeholder="Repetí la nueva contraseña"></div>
+      <div class="modal-actions"><button type="button" class="secondary modal-cancel">Cancelar</button><button class="primary">Guardar cambios</button></div>
+    </form></div>`;
   document.body.appendChild(wrap);
   const close=()=>wrap.remove();
-  wrap.querySelector(".modal-close").onclick=close;wrap.onclick=e=>{if(e.target===wrap)close();};
-  wrap.querySelectorAll(".avatar-option").forEach(btn=>btn.onclick=async()=>{
-    const key=btn.dataset.avatar;
-    const {error}=await sb.rpc("set_my_avatar",{new_avatar_key:key});
-    if(error){toast("No se pudo cambiar el avatar: "+error.message,true);return;}
-    state.profile.avatar_key=key;toast("Avatar actualizado");close();renderShell();
+  wrap.querySelector(".modal-close").onclick=close;
+  wrap.querySelector(".modal-cancel").onclick=close;
+  wrap.onclick=e=>{if(e.target===wrap)close();};
+
+  const hidden=wrap.querySelector('input[name="avatar_key"]');
+  wrap.querySelectorAll(".avatar-option").forEach(btn=>btn.onclick=()=>{
+    wrap.querySelectorAll(".avatar-option").forEach(x=>x.classList.remove("selected"));
+    btn.classList.add("selected");
+    hidden.value=btn.dataset.avatar;
   });
+
+  wrap.querySelector("#profileForm").onsubmit=async e=>{
+    e.preventDefault();
+    const fd=new FormData(e.target);
+    const fullName=String(fd.get("full_name")||"").trim();
+    const avatarKey=String(fd.get("avatar_key")||"meryl");
+    const password=String(fd.get("password")||"");
+    const repeat=String(fd.get("password_repeat")||"");
+    if(fullName.length<2){toast("El nombre es demasiado corto.",true);return;}
+    if(password && password.length<6){toast("La contraseña debe tener al menos 6 caracteres.",true);return;}
+    if(password!==repeat){toast("Las contraseñas no coinciden.",true);return;}
+    const submit=e.target.querySelector(".primary");
+    submit.disabled=true;submit.textContent="Guardando...";
+    try{
+      if(fullName!==state.profile.full_name){
+        const {error}=await sb.rpc("set_my_display_name",{new_name:fullName});
+        if(error)throw error;
+        state.profile.full_name=fullName;
+      }
+      if(avatarKey!==state.profile.avatar_key){
+        const {error}=await sb.rpc("set_my_avatar",{new_avatar_key:avatarKey});
+        if(error)throw error;
+        state.profile.avatar_key=avatarKey;
+      }
+      if(password){
+        const {error}=await sb.auth.updateUser({password});
+        if(error)throw error;
+      }
+      toast("Perfil actualizado");
+      close();
+      renderShell();
+    }catch(err){
+      toast("No se pudo actualizar el perfil: "+(err.message||err),true);
+      submit.disabled=false;submit.textContent="Guardar cambios";
+    }
+  };
 }
+
+function showForgotPassword(){
+  const wrap=document.createElement("div");
+  wrap.className="modal-backdrop";
+  wrap.innerHTML=`<div class="modal-card auth-modal">
+    <div class="modal-head"><div><h2>Recuperar contraseña</h2><p>Te enviaremos un enlace para elegir una nueva clave.</p></div><button class="modal-close">×</button></div>
+    <form id="forgotForm"><div class="field"><label>Email</label><input name="email" type="email" required autocomplete="email"></div>
+    <div class="modal-actions"><button type="button" class="secondary modal-cancel">Cancelar</button><button class="primary">Enviar enlace</button></div></form></div>`;
+  document.body.appendChild(wrap);
+  const close=()=>wrap.remove();
+  wrap.querySelector(".modal-close").onclick=close;
+  wrap.querySelector(".modal-cancel").onclick=close;
+  wrap.onclick=e=>{if(e.target===wrap)close();};
+  wrap.querySelector("#forgotForm").onsubmit=async e=>{
+    e.preventDefault();
+    const email=String(new FormData(e.target).get("email")||"").trim();
+    const redirectTo=`${window.location.origin}${window.location.pathname}?recovery=1`;
+    const btn=e.target.querySelector(".primary");btn.disabled=true;btn.textContent="Enviando...";
+    const {error}=await sb.auth.resetPasswordForEmail(email,{redirectTo});
+    if(error){toast("No se pudo enviar el email: "+error.message,true);btn.disabled=false;btn.textContent="Enviar enlace";return;}
+    close();toast("Revisá tu email para continuar.");
+  };
+}
+
+function showRecoveryPassword(){
+  if(document.querySelector(".recovery-modal-open"))return;
+  const wrap=document.createElement("div");
+  wrap.className="modal-backdrop recovery-modal-open";
+  wrap.innerHTML=`<div class="modal-card auth-modal">
+    <div class="modal-head"><div><h2>Nueva contraseña</h2><p>Elegí la nueva clave para tu cuenta.</p></div></div>
+    <form id="recoveryForm"><div class="field"><label>Nueva contraseña</label><input name="password" type="password" minlength="6" required autocomplete="new-password"></div>
+    <div class="field"><label>Repetir contraseña</label><input name="repeat" type="password" minlength="6" required autocomplete="new-password"></div>
+    <div class="modal-actions"><button class="primary">Guardar contraseña</button></div></form></div>`;
+  document.body.appendChild(wrap);
+  wrap.querySelector("#recoveryForm").onsubmit=async e=>{
+    e.preventDefault();
+    const fd=new FormData(e.target),password=String(fd.get("password")||""),repeat=String(fd.get("repeat")||"");
+    if(password!==repeat){toast("Las contraseñas no coinciden.",true);return;}
+    const btn=e.target.querySelector(".primary");btn.disabled=true;btn.textContent="Guardando...";
+    const {error}=await sb.auth.updateUser({password});
+    if(error){toast("No se pudo cambiar la contraseña: "+error.message,true);btn.disabled=false;btn.textContent="Guardar contraseña";return;}
+    history.replaceState({},document.title,window.location.pathname);
+    wrap.remove();toast("Contraseña actualizada");
+  };
+}
+
 async function loadTeachers(){
   const {data,error}=await sb.rpc("get_teacher_directory");
   if(error){console.error(error);toast("No se pudieron cargar los profes",true);return [];}

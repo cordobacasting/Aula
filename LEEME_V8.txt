@@ -1,0 +1,17 @@
+V8 PERFIL
+
+1. Ejecutá `supabase_v8_perfil.sql` en Supabase → SQL Editor.
+2. En Authentication → URL Configuration mantené:
+   Site URL: https://cordobacasting.github.io/Aula/
+   Redirect URL: https://cordobacasting.github.io/Aula/
+   Y agregá también, si el panel lo permite:
+   https://cordobacasting.github.io/Aula/?recovery=1
+3. Subí estos archivos a GitHub reemplazando la versión anterior.
+4. Esperá Pages y hacé Ctrl + Shift + R.
+
+Cambios:
+- Menú desplegable desde avatar/nombre.
+- Mi perfil: nombre visible, email fijo, avatar, contraseña.
+- Cerrar sesión en ese menú.
+- “¿Olvidaste tu contraseña?” en login.
+- Recuperación por email.
