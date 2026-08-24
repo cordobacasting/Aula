@@ -1,0 +1,39 @@
+AULA VIRTUAL CÓRDOBA CASTING · V9
+
+NOVEDADES
+1. ARCHIVADO DE CURSOS
+- Admin puede archivar una comisión terminada.
+- El curso desaparece de los activos para alumnos/profes.
+- Se conserva contenido, foro, alumnos y progreso.
+- Admin puede restaurarlo desde “Cursos archivados”.
+
+2. PROGRESO
+- Cada alumno puede marcar/desmarcar materiales como vistos.
+- Tarjetas de cursos muestran porcentaje visual.
+- Un cuestionario cuenta como completado al entregarlo.
+- Dentro del curso se ve el progreso total.
+
+3. CUESTIONARIOS
+- Profesor/admin puede crear multiple choice desde cada módulo.
+- Hasta 20 preguntas por cuestionario.
+- Cada pregunta admite hasta 4 opciones.
+- Se marca cuál es correcta.
+- Puede quedar en borrador o publicado.
+- Alumno lo completa dentro del Aula y ve el resultado.
+- Puede repetirlo; queda guardado el último intento para el progreso.
+
+4. MOSTRAR CONTRASEÑA
+- Se agrega automáticamente a campos de contraseña del login/perfil/recuperación.
+
+ANTES DE SUBIR A GITHUB
+1. Supabase → SQL Editor → New query.
+2. Ejecutá TODO `supabase_v9_learning.sql`.
+3. Si aparece advertencia de operación destructiva, se debe a reemplazo de funciones/policies; el archivo no elimina cursos existentes.
+4. Cuando dé Success, reemplazá los archivos de GitHub con esta V9.
+5. Esperá Pages y hacé Ctrl + Shift + R.
+
+PRUEBA RECOMENDADA
+- Admin: crear un cuestionario en un módulo.
+- Alumno prueba: marcar un PDF como visto y hacer el cuestionario.
+- Confirmar que cambia el porcentaje del curso.
+- Admin: archivar un curso de prueba y restaurarlo.

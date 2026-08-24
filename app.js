@@ -781,5 +781,485 @@ function bindContent(){
   });
   document.querySelectorAll(".view-staff-lesson").forEach(b=>b.onclick=()=>staffLessonViewer(Number(b.dataset.space),Number(b.dataset.module),Number(b.dataset.lesson)));
 }
+
+/* ==========================================================
+   V9 · PROGRESO + ARCHIVO + CUESTIONARIOS
+   ========================================================== */
+
+state.allCourses = [];
+state.archivedCourses = [];
+state.lessonProgress = new Set();
+state.quizAttempts = new Map();
+state.courseUnits = {};
+state.quizId = null;
+state.quizCache = {};
+
+function progressForCourse(courseId){
+  const units=state.courseUnits[String(courseId)]||{lessons:[],quizzes:[]};
+  const total=units.lessons.length+units.quizzes.length;
+  const doneLessons=units.lessons.filter(id=>state.lessonProgress.has(Number(id))).length;
+  const doneQuizzes=units.quizzes.filter(id=>state.quizAttempts.has(Number(id))).length;
+  const done=doneLessons+doneQuizzes;
+  return {total,done,pct:total?Math.round(done/total*100):0};
+}
+
+async function loadCoursesV9(){
+  const {data,error}=await sb.from("courses")
+    .select("id,name,code,description,teacher_name,color,is_active,created_at,cover_image_url,archived_at")
+    .eq("is_active",true)
+    .order("created_at",{ascending:true});
+
+  if(error){
+    console.error(error);
+    toast("No se pudieron cargar los cursos. ¿Ejecutaste la migración V9?",true);
+    state.courses=[];state.allCourses=[];state.archivedCourses=[];
+    return;
+  }
+  state.allCourses=data||[];
+  state.archivedCourses=state.allCourses.filter(c=>!!c.archived_at);
+  state.courses=state.allCourses.filter(c=>!c.archived_at);
+}
+
+loadCourses = loadCoursesV9;
+
+async function loadLearningState(){
+  state.lessonProgress=new Set();
+  state.quizAttempts=new Map();
+  state.courseUnits={};
+
+  const activeIds=state.courses.map(c=>Number(c.id));
+  if(!activeIds.length)return;
+
+  const [{data:structure,error:structureError},{data:progress},{data:attempts}]=await Promise.all([
+    sb.from("modules").select("id,course_id,lessons(id),quizzes(id,is_published)").in("course_id",activeIds),
+    sb.from("lesson_progress").select("lesson_id").eq("user_id",state.user.id),
+    sb.from("quiz_attempts").select("quiz_id,score,total,completed_at").eq("user_id",state.user.id).order("completed_at",{ascending:false})
+  ]);
+
+  if(structureError)console.error(structureError);
+
+  (progress||[]).forEach(r=>state.lessonProgress.add(Number(r.lesson_id)));
+
+  (attempts||[]).forEach(a=>{
+    const id=Number(a.quiz_id);
+    if(!state.quizAttempts.has(id))state.quizAttempts.set(id,{score:Number(a.score),total:Number(a.total),completed_at:a.completed_at});
+  });
+
+  (structure||[]).forEach(m=>{
+    const key=String(m.course_id);
+    state.courseUnits[key]??={lessons:[],quizzes:[]};
+    (m.lessons||[]).forEach(l=>state.courseUnits[key].lessons.push(Number(l.id)));
+    (m.quizzes||[]).filter(q=>q.is_published!==false).forEach(q=>state.courseUnits[key].quizzes.push(Number(q.id)));
+  });
+}
+
+loadAuthenticatedUser = async function(user){
+  state.user=user;
+  const {data:profile,error}=await sb.from("profiles").select("id,full_name,role,avatar_key,created_at").eq("id",user.id).single();
+  if(error||!profile){
+    app.innerHTML=`<div class="login-panel" style="min-height:100vh"><div class="login-card"><h2>No encontramos tu perfil</h2><p>La cuenta existe, pero no tiene un perfil asociado.</p><button class="primary" id="logoutBroken">Cerrar sesión</button></div></div>`;
+    document.getElementById("logoutBroken").onclick=logout;return;
+  }
+  state.profile=profile;
+  await loadCourses();
+  await loadLearningState();
+  renderShell();
+};
+
+loadCourseModules = async function(courseId,force=false){
+  if(state.modules[courseId]&&!force)return state.modules[courseId];
+  const {data,error}=await sb.from("modules").select(`
+    id,course_id,title,description,position,
+    lessons(id,module_id,title,description,content_type,content_url,text_content,position,created_by,created_at),
+    quizzes(id,module_id,title,description,position,is_published,created_by,created_at)
+  `).eq("course_id",courseId).order("position",{ascending:true});
+  if(error){console.error(error);toast("No se pudo cargar el contenido",true);return [];}
+  (data||[]).forEach(m=>{
+    m.lessons=(m.lessons||[]).sort((a,b)=>(a.position||0)-(b.position||0));
+    m.quizzes=(m.quizzes||[]).sort((a,b)=>(a.position||0)-(b.position||0));
+  });
+  state.modules[courseId]=data||[];
+  return state.modules[courseId];
+};
+
+function progressVisual(courseId,compact=false){
+  if(state.profile.role!=="student")return "";
+  const p=progressForCourse(courseId);
+  if(!p.total)return `<div class="course-progress empty-progress"><span>Sin actividades todavía</span></div>`;
+  return `<div class="course-progress ${compact?"compact-progress":""}">
+    <div class="course-progress-top"><strong>${p.pct}%</strong><span>${p.done} de ${p.total} completados</span></div>
+    <div class="course-progress-track"><i style="width:${p.pct}%"></i></div>
+  </div>`;
+}
+
+courseCard = function(c){
+  const image=courseImage(c);
+  const style=image?`background-image:url('${esc(image)}')`:`background:linear-gradient(140deg,${esc(c.color||"#7b0826")},#7650c8)`;
+  return `<article class="course-card">
+    <div class="course-cover ${image?"has-image":""}" style="${style}">
+      <span class="course-code">${esc(c.code||"CURSO")}</span><span class="course-arrow">↗</span>
+    </div>
+    <div class="course-body">
+      <h3>${esc(c.name)}</h3><p>${esc(c.description||"")}</p>
+      ${progressVisual(c.id,true)}
+      <div class="meta"><span>${esc(c.teacher_name||"Córdoba Casting")}</span></div>
+      <div class="course-actions"><button class="primary open-course" data-course="${c.id}">Entrar al curso</button></div>
+    </div>
+  </article>`;
+};
+
+function learningItemHTML(item,index,cid){
+  if(item.kind==="lesson"){
+    const done=state.lessonProgress.has(Number(item.data.id));
+    return `<div class="lesson learning-row ${done?"is-complete":""}">
+      <div class="learning-status">${done?"✓":String(index+1).padStart(2,"0")}</div>
+      <div><h4>${esc(item.data.title)}</h4><p>${esc(item.data.description||"")}</p></div>
+      <div class="learning-actions"><span class="lesson-type">${typeLabel(item.data.content_type)}</span><button class="lesson-view open-lesson" data-course="${cid}" data-lesson="${item.data.id}">Ver →</button></div>
+    </div>`;
+  }
+
+  const attempt=state.quizAttempts.get(Number(item.data.id));
+  return `<div class="lesson learning-row quiz-row ${attempt?"is-complete":""}">
+    <div class="learning-status quiz-status">${attempt?"✓":"?"}</div>
+    <div><h4>${esc(item.data.title)}</h4><p>${esc(item.data.description||"Cuestionario interactivo")}</p>
+      ${attempt?`<div class="quiz-last-score">Último resultado: <strong>${attempt.score}/${attempt.total}</strong></div>`:""}
+    </div>
+    <div class="learning-actions"><span class="lesson-type quiz-type">Cuestionario</span><button class="lesson-view open-quiz" data-course="${cid}" data-quiz="${item.data.id}">${attempt?"Repetir":"Hacer"} →</button></div>
+  </div>`;
+}
+
+moduleHTML = function(m,i,cid){
+  const mixed=[
+    ...(m.lessons||[]).map(x=>({kind:"lesson",position:Number(x.position||0),data:x})),
+    ...(m.quizzes||[]).filter(q=>q.is_published!==false).map(x=>({kind:"quiz",position:Number(x.position||0),data:x}))
+  ].sort((a,b)=>a.position-b.position || (a.kind==="lesson"?-1:1));
+
+  return `<div class="module">
+    <div class="module-head">
+      <div class="module-title"><div class="module-number">${i+1}</div><div><strong>${esc(m.title)}</strong><div style="font-size:.75rem;color:var(--muted)">${mixed.length} actividades</div></div></div>
+    </div>
+    ${mixed.length?mixed.map((item,j)=>learningItemHTML(item,j,cid)).join(""):`<div class="empty compact-empty">Todavía no hay actividades.</div>`}
+  </div>`;
+};
+
+courseHTML = async function(id){
+  const c=state.courses.find(x=>String(x.id)===String(id));
+  if(!c)return `<div class="empty">No tenés acceso a este curso.</div>`;
+  let inner="";
+  if(state.courseTab==="forum"){
+    const threads=await loadForum(c.id);
+    inner=forumHTML(c,threads);
+  }else{
+    const mods=await loadCourseModules(c.id);
+    inner=`${progressVisual(c.id)}
+      <section class="panel">
+        <div class="panel-head"><h2>Contenido del curso</h2><span class="tag">${mods.length} módulos</span></div>
+        ${mods.length?mods.map((m,i)=>moduleHTML(m,i,c.id)).join(""):`<div class="empty">Todavía no hay módulos publicados.</div>`}
+      </section>`;
+  }
+  return `<div class="breadcrumb"><button class="lesson-view" data-back="courses">Mis cursos</button> / ${esc(c.name)}</div>
+    <div class="hero"><div><div class="brand-kicker" style="color:#7b0826">${esc(c.code||"CURSO")}</div><h1>${esc(c.name)}</h1><p>${esc(c.description||"")}</p></div></div>
+    <div class="course-tabs"><button class="course-tab ${state.courseTab==="content"?"active":""}" data-course-tab="content">Módulos y contenido</button><button class="course-tab ${state.courseTab==="forum"?"active":""}" data-course-tab="forum">Foro del curso</button></div>${inner}`;
+};
+
+lessonHTML = async function(cid,lid){
+  const c=state.courses.find(x=>String(x.id)===String(cid));
+  const mods=await loadCourseModules(c.id);
+  let lesson=null,module=null;
+  for(const m of mods){const f=m.lessons.find(l=>String(l.id)===String(lid));if(f){lesson=f;module=m;break;}}
+  if(!lesson)return `<div class="empty">Contenido no encontrado.</div>`;
+
+  let body="";
+  if(lesson.content_type==="video")body=`<iframe class="video-frame" src="${esc(youtubeEmbed(lesson.content_url||""))}" allowfullscreen></iframe>`;
+  else if(lesson.content_type==="pdf"){
+    const pdfUrl=await getPdfSignedUrl(lesson.content_url);
+    body=pdfUrl?`<div class="pdf-shell"><div class="pdf-toolbar"><strong>${esc(lesson.title)}</strong><a class="secondary mini" href="${esc(pdfUrl)}" target="_blank" rel="noopener">Descargar PDF</a></div><iframe class="pdf-frame" src="${esc(pdfUrl)}#toolbar=1&navpanes=0"></iframe></div>`:`<div class="empty">No se pudo abrir el PDF.</div>`;
+  }else if(lesson.content_type==="text")body=`<div class="material-box" style="text-align:left;white-space:pre-wrap">${esc(lesson.text_content||"")}</div>`;
+  else body=`<div class="material-box"><h3>${esc(lesson.title)}</h3><p>${esc(lesson.description||"")}</p><a class="primary" style="display:inline-block;text-decoration:none" href="${esc(lesson.content_url||"#")}" target="_blank" rel="noopener">Abrir material ↗</a></div>`;
+
+  const done=state.lessonProgress.has(Number(lesson.id));
+  const completion=state.profile.role==="student"?`<div class="completion-card ${done?"done":""}">
+    <div><span class="completion-icon">${done?"✓":"○"}</span><div><strong>${done?"Contenido visto":"¿Terminaste este contenido?"}</strong><small>${done?"Podés desmarcarlo si querés volver a tenerlo pendiente.":"Marcá el material como visto para actualizar tu progreso."}</small></div></div>
+    <button class="${done?"secondary":"primary"} toggle-seen" data-lesson="${lesson.id}" data-course="${c.id}">${done?"Marcar pendiente":"Marcar como visto"}</button>
+  </div>`:"";
+
+  return `<div class="breadcrumb"><button class="lesson-view" data-course-back="${c.id}">${esc(c.name)}</button> / ${esc(module.title)}</div>
+    <div class="hero"><div><div class="brand-kicker" style="color:#7b0826">${typeLabel(lesson.content_type)}</div><h1>${esc(lesson.title)}</h1><p>${esc(lesson.description||"")}</p></div></div>
+    ${completion}<section class="panel">${body}</section>`;
+};
+
+/* ---------- Cuestionarios ---------- */
+
+async function loadQuizPublic(quizId,force=false){
+  if(state.quizCache[quizId]&&!force)return state.quizCache[quizId];
+  const {data,error}=await sb.rpc("get_quiz_for_user",{p_quiz_id:Number(quizId)});
+  if(error){console.error(error);throw error;}
+  state.quizCache[quizId]=data;
+  return data;
+}
+
+async function quizHTML(cid,qid){
+  try{
+    const q=await loadQuizPublic(qid,true);
+    if(!q)return `<div class="empty">Cuestionario no disponible.</div>`;
+    const attempt=state.quizAttempts.get(Number(qid));
+    return `<div class="breadcrumb"><button class="lesson-view" data-course-back="${cid}">Volver al curso</button> / Cuestionario</div>
+      <div class="quiz-hero">
+        <div class="quiz-hero-icon">?</div>
+        <div><div class="brand-kicker" style="color:#7650c8">Tarea interactiva</div><h1>${esc(q.title)}</h1><p>${esc(q.description||"Elegí una opción en cada pregunta.")}</p></div>
+        ${attempt?`<div class="quiz-score-pill">Último: ${attempt.score}/${attempt.total}</div>`:""}
+      </div>
+      <form id="quizForm" data-quiz="${q.id}" data-course="${cid}" class="quiz-form">
+        ${(q.questions||[]).map((question,i)=>`<section class="quiz-question-card">
+          <div class="quiz-question-number">${i+1}</div>
+          <h3>${esc(question.prompt)}</h3>
+          <div class="quiz-options">${(question.options||[]).map((o,j)=>`<label class="quiz-option"><input type="radio" name="q_${question.id}" value="${o.id}" required><span class="quiz-option-letter">${String.fromCharCode(65+j)}</span><span>${esc(o.label)}</span></label>`).join("")}</div>
+        </section>`).join("")}
+        <div class="quiz-submit-bar"><div><strong>${(q.questions||[]).length} preguntas</strong><span>Podés repetir el cuestionario después.</span></div><button class="primary">Entregar cuestionario</button></div>
+      </form>`;
+  }catch(err){
+    return `<div class="empty">No se pudo cargar el cuestionario: ${esc(err.message||"Error")}</div>`;
+  }
+}
+
+function quizResultModal(result){
+  const pct=result.total?Math.round(result.score/result.total*100):0;
+  const wrap=document.createElement("div");wrap.className="modal-backdrop";
+  wrap.innerHTML=`<div class="modal-card quiz-result-modal">
+    <div class="quiz-result-ring" style="--score:${pct}"><div><strong>${pct}%</strong><span>${result.score} de ${result.total}</span></div></div>
+    <h2>${pct>=70?"¡Muy bien!":"Cuestionario completado"}</h2>
+    <p>${pct>=70?"Buen trabajo. Tu resultado quedó guardado.":"Tu resultado quedó guardado. Podés revisar el material y volver a intentarlo."}</p>
+    <button class="primary quiz-result-close">Volver al curso</button>
+  </div>`;
+  document.body.appendChild(wrap);
+  wrap.querySelector(".quiz-result-close").onclick=()=>{wrap.remove();state.view="course";state.courseTab="content";renderShell();};
+}
+
+function blankQuizQuestion(){
+  return {prompt:"",options:["","","",""],correct_index:0};
+}
+
+async function getQuizForEdit(quizId){
+  if(!quizId)return null;
+  const {data:q,error}=await sb.from("quizzes").select("id,module_id,title,description,position,is_published").eq("id",quizId).single();
+  if(error)throw error;
+  const {data:questions,error:qe}=await sb.from("quiz_questions").select("id,prompt,position,quiz_options(id,label,is_correct,position)").eq("quiz_id",quizId).order("position");
+  if(qe)throw qe;
+  return {
+    ...q,
+    questions:(questions||[]).map(x=>({
+      prompt:x.prompt,
+      options:(x.quiz_options||[]).sort((a,b)=>a.position-b.position).map(o=>o.label),
+      correct_index:Math.max(0,(x.quiz_options||[]).sort((a,b)=>a.position-b.position).findIndex(o=>o.is_correct))
+    }))
+  };
+}
+
+function quizQuestionBuilderHTML(q,index){
+  const opts=[...(q.options||[])];while(opts.length<4)opts.push("");
+  return `<div class="quiz-builder-question" data-question-index="${index}">
+    <div class="quiz-builder-head"><strong>Pregunta ${index+1}</strong><button type="button" class="danger mini remove-quiz-question">Quitar</button></div>
+    <div class="field"><label>Pregunta</label><input class="qb-prompt" value="${esc(q.prompt||"")}" required></div>
+    <div class="quiz-builder-options">${opts.slice(0,4).map((o,i)=>`<div class="qb-option-row"><label><input type="radio" class="qb-correct" name="correct_${index}" value="${i}" ${Number(q.correct_index)===i?"checked":""}><span>Correcta</span></label><input class="qb-option" value="${esc(o)}" placeholder="Opción ${i+1}" ${i<2?"required":""}></div>`).join("")}</div>
+  </div>`;
+}
+
+async function openQuizBuilder(courseId,moduleId,quizId=null){
+  let quiz=quizId?await getQuizForEdit(quizId):{title:"",description:"",position:1,is_published:true,questions:[blankQuizQuestion()]};
+  if(!quiz.questions?.length)quiz.questions=[blankQuizQuestion()];
+
+  const wrap=document.createElement("div");wrap.className="modal-backdrop";
+  wrap.innerHTML=`<div class="modal-card quiz-builder-modal">
+    <div class="modal-head"><div><h2>${quizId?"Editar":"Nuevo"} cuestionario</h2><p>Multiple choice simple para usar como tarea interactiva.</p></div><button class="modal-close">×</button></div>
+    <form id="quizBuilderForm">
+      <div class="field"><label>Título</label><input name="title" value="${esc(quiz.title||"")}" required></div>
+      <div class="field"><label>Descripción</label><textarea name="description">${esc(quiz.description||"")}</textarea></div>
+      <div class="field"><label>Orden dentro del módulo</label><input name="position" type="number" min="1" value="${Number(quiz.position||1)}"></div>
+      <label class="quiz-publish-toggle"><input name="is_published" type="checkbox" ${quiz.is_published!==false?"checked":""}><span>Publicado para alumnos</span></label>
+      <div class="quiz-builder-title"><strong>Preguntas</strong><button type="button" class="secondary mini" id="addQuizQuestion">+ Agregar pregunta</button></div>
+      <div id="quizQuestionsBuilder"></div>
+      <div class="modal-actions"><button type="button" class="secondary modal-cancel">Cancelar</button><button class="primary">Guardar cuestionario</button></div>
+    </form>
+  </div>`;
+  document.body.appendChild(wrap);
+  const close=()=>wrap.remove();
+  wrap.querySelector(".modal-close").onclick=close;wrap.querySelector(".modal-cancel").onclick=close;
+
+  let questions=quiz.questions.map(x=>({...x,options:[...(x.options||[])]}));
+  const box=wrap.querySelector("#quizQuestionsBuilder");
+
+  const renderQuestions=()=>{
+    box.innerHTML=questions.map((q,i)=>quizQuestionBuilderHTML(q,i)).join("");
+    box.querySelectorAll(".remove-quiz-question").forEach((b,i)=>b.onclick=()=>{if(questions.length===1){toast("El cuestionario necesita al menos una pregunta.",true);return;}questions.splice(i,1);renderQuestions();});
+  };
+  renderQuestions();
+
+  wrap.querySelector("#addQuizQuestion").onclick=()=>{if(questions.length>=20){toast("Máximo 20 preguntas por cuestionario.",true);return;}questions.push(blankQuizQuestion());renderQuestions();};
+
+  wrap.querySelector("#quizBuilderForm").onsubmit=async e=>{
+    e.preventDefault();
+    const cards=[...box.querySelectorAll(".quiz-builder-question")];
+    const payloadQuestions=[];
+    for(const card of cards){
+      const prompt=card.querySelector(".qb-prompt").value.trim();
+      const options=[...card.querySelectorAll(".qb-option")].map(x=>x.value.trim()).filter(Boolean);
+      const selected=card.querySelector(".qb-correct:checked");
+      const originalIndex=selected?Number(selected.value):0;
+      const all=[...card.querySelectorAll(".qb-option")].map(x=>x.value.trim());
+      const correctText=all[originalIndex];
+      const correctIndex=options.findIndex(x=>x===correctText);
+      if(!prompt||options.length<2||correctIndex<0){toast("Cada pregunta necesita texto, al menos dos opciones y una respuesta correcta.",true);return;}
+      payloadQuestions.push({prompt,options,correct_index:correctIndex});
+    }
+
+    const fd=new FormData(e.target);
+    const btn=e.target.querySelector(".primary");btn.disabled=true;btn.textContent="Guardando...";
+    const {data,error}=await sb.rpc("save_quiz",{
+      p_quiz_id:quizId?Number(quizId):null,
+      p_module_id:Number(moduleId),
+      p_title:String(fd.get("title")||"").trim(),
+      p_description:String(fd.get("description")||"").trim(),
+      p_position:Number(fd.get("position")||1),
+      p_is_published:fd.get("is_published")==="on",
+      p_questions:payloadQuestions
+    });
+    if(error){console.error(error);toast("No se pudo guardar el cuestionario: "+error.message,true);btn.disabled=false;btn.textContent="Guardar cuestionario";return;}
+    delete state.modules[courseId];delete state.quizCache[Number(data)];
+    await loadLearningState();
+    toast("Cuestionario guardado");
+    close();renderShell();
+  };
+}
+
+/* ---------- Gestión / archivado ---------- */
+
+manageModuleHTML = function(c,m,i){
+  return `<div class="module"><div class="module-head"><div class="module-title"><div class="module-number">${i+1}</div><div><strong>${esc(m.title)}</strong><div style="font-size:.75rem;color:var(--muted)">${(m.lessons||[]).length+(m.quizzes||[]).length} actividades</div></div></div>
+    <div class="admin-actions"><button class="secondary mini edit-module" data-course="${c.id}" data-module="${m.id}">Editar módulo</button>${isAdmin()?`<button class="danger mini delete-module" data-course="${c.id}" data-module="${m.id}">Eliminar</button>`:""}<button class="gold-button mini add-lesson" data-course="${c.id}" data-module="${m.id}">+ Material</button><button class="secondary mini add-quiz" data-course="${c.id}" data-module="${m.id}">+ Cuestionario</button></div></div>
+    ${(m.lessons||[]).map((l,j)=>`<div class="lesson-admin-row"><div class="lesson-index">${String(j+1).padStart(2,"0")}</div><div><strong>${esc(l.title)}</strong><div style="font-size:.75rem;color:var(--muted)">${typeLabel(l.content_type)} · Orden ${l.position}</div></div><div class="admin-actions"><button class="secondary mini edit-lesson" data-course="${c.id}" data-module="${m.id}" data-lesson="${l.id}">Editar</button>${isAdmin()?`<button class="danger mini delete-lesson" data-course="${c.id}" data-module="${m.id}" data-lesson="${l.id}">Eliminar</button>`:""}</div></div>`).join("")}
+    ${(m.quizzes||[]).map(q=>`<div class="lesson-admin-row quiz-admin-row"><div class="lesson-index">?</div><div><strong>${esc(q.title)}</strong><div style="font-size:.75rem;color:var(--muted)">Cuestionario · Orden ${q.position} · ${q.is_published===false?"Borrador":"Publicado"}</div></div><div class="admin-actions"><button class="secondary mini edit-quiz" data-course="${c.id}" data-module="${m.id}" data-quiz="${q.id}">Editar</button>${isAdmin()?`<button class="danger mini delete-quiz" data-course="${c.id}" data-quiz="${q.id}">Eliminar</button>`:""}</div></div>`).join("")}
+  </div>`;
+};
+
+manageHTML = async function(){
+  if(!isStaff())return `<div class="empty">Sin permiso.</div>`;
+  let active="";
+  for(const c of state.courses){
+    const mods=await loadCourseModules(c.id);
+    active+=`<section class="panel"><div class="panel-head"><div><h2>${esc(c.name)} · ${esc(c.code||"")}</h2><div style="font-size:.8rem;color:var(--muted)">${esc(c.teacher_name||"")}</div></div>
+      <div class="admin-actions"><button class="secondary edit-course" data-course="${c.id}">Editar curso</button>${isAdmin()?`<button class="gold-button add-module" data-course="${c.id}">+ Módulo</button><button class="secondary archive-course" data-course="${c.id}">Archivar</button><button class="danger delete-course" data-course="${c.id}">Eliminar</button>`:""}</div></div>
+      ${mods.length?mods.map((m,i)=>manageModuleHTML(c,m,i)).join(""):`<div class="empty">Sin módulos.</div>`}</section>`;
+  }
+
+  let archived="";
+  if(isAdmin()&&state.archivedCourses.length){
+    archived=`<section class="archive-section"><div class="archive-heading"><div><div class="brand-kicker" style="color:#7650c8">Historial</div><h2>Cursos archivados</h2><p>Conservan alumnos, módulos, foros, progreso y materiales, pero ya no aparecen como cursos activos.</p></div><span>${state.archivedCourses.length}</span></div>
+      <div class="archive-grid">${state.archivedCourses.map(c=>`<article class="archive-card"><div><span class="tag">Archivado</span><h3>${esc(c.name)}</h3><p>${esc(c.code||"")} · ${esc(c.teacher_name||"Córdoba Casting")}</p></div><button class="secondary restore-course" data-course="${c.id}">Restaurar curso</button></article>`).join("")}</div>
+    </section>`;
+  }
+
+  return `<div class="hero"><div><div class="brand-kicker" style="color:#7b0826">${isAdmin()?"Administración":"Profesor"}</div><h1>Cursos y contenido</h1><p>${isAdmin()?"Organizá cursos, cuestionarios y materiales. Cuando una comisión termina, archivala en vez de eliminarla.":"Podés editar los cursos asignados, sus módulos, materiales y cuestionarios."}</p></div>${isAdmin()?`<button class="primary" id="newCourse">+ Nuevo curso</button>`:""}</div>
+    ${active||`<div class="empty">No hay cursos activos.</div>`}${archived}`;
+};
+
+/* ---------- Mostrar contraseña ---------- */
+
+function enhancePasswordInputs(root=document){
+  root.querySelectorAll('input[type="password"]:not([data-toggle-ready])').forEach(input=>{
+    input.dataset.toggleReady="1";
+    const label=document.createElement("label");label.className="show-password-toggle";
+    label.innerHTML=`<input type="checkbox"><span>Mostrar contraseña</span>`;
+    input.insertAdjacentElement("afterend",label);
+    label.querySelector("input").onchange=e=>input.type=e.target.checked?"text":"password";
+  });
+}
+const passwordObserver=new MutationObserver(()=>enhancePasswordInputs(document));
+passwordObserver.observe(document.body,{childList:true,subtree:true});
+setTimeout(()=>enhancePasswordInputs(document),100);
+
+/* ---------- Extensión de render / bindings ---------- */
+
+const renderContentV8=renderContent;
+renderContent = async function(){
+  if(state.view==="quiz"){
+    const c=document.getElementById("content");c.innerHTML=`<div class="empty">Cargando cuestionario...</div>`;
+    c.innerHTML=await quizHTML(state.courseId,state.quizId);
+    bindContent();
+    return;
+  }
+  await renderContentV8();
+};
+
+const bindContentV8=bindContent;
+bindContent = function(){
+  bindContentV8();
+
+  document.querySelectorAll(".toggle-seen").forEach(btn=>btn.onclick=async()=>{
+    const lessonId=Number(btn.dataset.lesson),courseId=Number(btn.dataset.course);
+    btn.disabled=true;
+    let error=null;
+    if(state.lessonProgress.has(lessonId)){
+      ({error}=await sb.from("lesson_progress").delete().eq("user_id",state.user.id).eq("lesson_id",lessonId));
+      if(!error)state.lessonProgress.delete(lessonId);
+    }else{
+      ({error}=await sb.from("lesson_progress").insert({user_id:state.user.id,lesson_id:lessonId}));
+      if(!error)state.lessonProgress.add(lessonId);
+    }
+    if(error){toast("No se pudo actualizar el progreso: "+error.message,true);btn.disabled=false;return;}
+    toast(state.lessonProgress.has(lessonId)?"Marcado como visto":"Marcado como pendiente");
+    renderShell();
+  });
+
+  document.querySelectorAll(".open-quiz").forEach(btn=>btn.onclick=()=>{
+    state.courseId=btn.dataset.course;state.quizId=Number(btn.dataset.quiz);state.view="quiz";renderShell();
+  });
+
+  const quizForm=document.getElementById("quizForm");
+  if(quizForm)quizForm.onsubmit=async e=>{
+    e.preventDefault();
+    const q=await loadQuizPublic(Number(e.target.dataset.quiz));
+    const answers={};
+    for(const question of q.questions||[]){
+      const picked=e.target.querySelector(`input[name="q_${question.id}"]:checked`);
+      if(!picked){toast("Respondé todas las preguntas.",true);return;}
+      answers[String(question.id)]=Number(picked.value);
+    }
+    const btn=e.target.querySelector(".primary");btn.disabled=true;btn.textContent="Corrigiendo...";
+    const {data,error}=await sb.rpc("submit_quiz",{p_quiz_id:Number(e.target.dataset.quiz),p_answers:answers});
+    if(error){toast("No se pudo entregar: "+error.message,true);btn.disabled=false;btn.textContent="Entregar cuestionario";return;}
+    state.quizAttempts.set(Number(e.target.dataset.quiz),{score:Number(data.score),total:Number(data.total),completed_at:new Date().toISOString()});
+    await loadLearningState();
+    quizResultModal(data);
+  };
+
+  document.querySelectorAll(".add-quiz").forEach(b=>b.onclick=()=>openQuizBuilder(Number(b.dataset.course),Number(b.dataset.module)));
+  document.querySelectorAll(".edit-quiz").forEach(b=>b.onclick=()=>openQuizBuilder(Number(b.dataset.course),Number(b.dataset.module),Number(b.dataset.quiz)));
+  document.querySelectorAll(".delete-quiz").forEach(b=>b.onclick=async()=>{
+    if(!isAdmin())return;
+    if(!confirm("¿Eliminar este cuestionario y sus intentos?"))return;
+    const {error}=await sb.from("quizzes").delete().eq("id",Number(b.dataset.quiz));
+    if(error){toast(error.message,true);return;}
+    delete state.modules[Number(b.dataset.course)];
+    await loadLearningState();toast("Cuestionario eliminado");renderShell();
+  });
+
+  document.querySelectorAll(".archive-course").forEach(b=>b.onclick=async()=>{
+    if(!isAdmin())return;
+    const course=state.courses.find(c=>String(c.id)===String(b.dataset.course));
+    if(!confirm(`¿Archivar “${course?.name||"este curso"}”?\n\nDejará de aparecer a alumnos y profesores, pero conservará todo su contenido e historial.`))return;
+    const {error}=await sb.from("courses").update({archived_at:new Date().toISOString()}).eq("id",Number(b.dataset.course));
+    if(error){toast(error.message,true);return;}
+    delete state.modules[Number(b.dataset.course)];
+    await loadCourses();await loadLearningState();toast("Curso archivado");renderShell();
+  });
+
+  document.querySelectorAll(".restore-course").forEach(b=>b.onclick=async()=>{
+    if(!isAdmin())return;
+    const {error}=await sb.from("courses").update({archived_at:null}).eq("id",Number(b.dataset.course));
+    if(error){toast(error.message,true);return;}
+    await loadCourses();await loadLearningState();toast("Curso restaurado");renderShell();
+  });
+};
+
 sb.auth.onAuthStateChange(event=>{if(event==="SIGNED_OUT"&&state.user){state.user=null;state.profile=null;renderLogin();}});
 boot();
