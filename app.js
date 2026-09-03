@@ -75,6 +75,71 @@ function isAdmin(){return state.profile?.role==="admin";}
 function toast(msg,error=false){const t=document.createElement("div");t.className="toast";t.textContent=msg;if(error)t.style.background="#8b1635";document.body.appendChild(t);setTimeout(()=>t.remove(),2800);}
 function loadingHTML(msg="Cargando aula..."){return `<div style="min-height:100vh;display:grid;place-items:center"><div style="text-align:center"><img src="assets/logo.png" style="width:84px;height:90px;object-fit:contain;background:#111;border-radius:18px;padding:8px"><h2 style="font-family:Manrope;color:#4d0015">${esc(msg)}</h2></div></div>`;}
 
+
+function sanitizeSupportHtml(html=""){
+  const parser=new DOMParser();
+  const doc=parser.parseFromString(`<div>${html}</div>`,"text/html");
+  const root=doc.body.firstElementChild;
+  const allowed=new Set(["P","BR","STRONG","B","EM","I","U","H2","H3","UL","OL","LI","BLOCKQUOTE","A"]);
+  const clean=(node)=>{
+    [...node.children].forEach(child=>{
+      if(!allowed.has(child.tagName)){ child.replaceWith(...child.childNodes); return; }
+      [...child.attributes].forEach(attr=>{
+        const name=attr.name.toLowerCase();
+        if(child.tagName==="A" && name==="href"){
+          const href=child.getAttribute("href")||"";
+          if(!/^https?:\/\//i.test(href) && !/^mailto:/i.test(href))child.removeAttribute("href");
+        } else if(!(child.tagName==="A" && ["target","rel"].includes(name))){
+          child.removeAttribute(attr.name);
+        }
+      });
+      if(child.tagName==="A"){child.setAttribute("target","_blank");child.setAttribute("rel","noopener");}
+      clean(child);
+    });
+  };
+  clean(root);
+  return root.innerHTML.trim();
+}
+function supportEditorHTML(value=""){
+  const safe=sanitizeSupportHtml(value||"");
+  return `<div class="support-editor-wrap">
+    <div class="support-toolbar">
+      <button type="button" data-cmd="bold"><strong>B</strong></button>
+      <button type="button" data-cmd="italic"><em>I</em></button>
+      <button type="button" data-cmd="underline"><u>U</u></button>
+      <span class="support-toolbar-sep"></span>
+      <button type="button" data-block="p">Texto</button>
+      <button type="button" data-block="h2">Título</button>
+      <button type="button" data-block="h3">Subtítulo</button>
+      <span class="support-toolbar-sep"></span>
+      <button type="button" data-cmd="insertUnorderedList">• Lista</button>
+      <button type="button" data-cmd="insertOrderedList">1. Lista</button>
+      <button type="button" data-block="blockquote">❝</button>
+      <button type="button" data-link="1">🔗</button>
+      <button type="button" data-clear="1">Limpiar</button>
+    </div>
+    <div class="support-editor" contenteditable="true" data-placeholder="Escribí acá el texto que acompañará al material...">${safe}</div>
+    <textarea class="support-editor-value hidden" name="support_text_html">${esc(safe)}</textarea>
+    <div class="support-editor-hint">Opcional · se mostrará antes del material principal.</div>
+  </div>`;
+}
+function bindSupportEditors(root=document){
+  root.querySelectorAll(".support-editor-wrap:not([data-ready])").forEach(wrap=>{
+    wrap.dataset.ready="1";
+    const editor=wrap.querySelector(".support-editor"), hidden=wrap.querySelector(".support-editor-value");
+    const sync=()=>hidden.value=sanitizeSupportHtml(editor.innerHTML);
+    editor.addEventListener("input",sync); editor.addEventListener("blur",sync);
+    wrap.querySelectorAll("[data-cmd]").forEach(b=>b.onclick=()=>{editor.focus();document.execCommand(b.dataset.cmd,false,null);sync();});
+    wrap.querySelectorAll("[data-block]").forEach(b=>b.onclick=()=>{editor.focus();document.execCommand("formatBlock",false,b.dataset.block);sync();});
+    wrap.querySelector("[data-link]")?.addEventListener("click",()=>{const u=prompt("Pegá el enlace:");if(!u)return;editor.focus();document.execCommand("createLink",false,u);sync();});
+    wrap.querySelector("[data-clear]")?.addEventListener("click",()=>{editor.focus();document.execCommand("removeFormat",false,null);sync();});
+    sync();
+  });
+}
+function supportTextBlock(html=""){
+  const clean=sanitizeSupportHtml(html||"");
+  return clean?`<section class="support-text-card"><div class="support-text-kicker">Material de apoyo</div><div class="support-text-content">${clean}</div></section>`:"";
+}
 function courseImage(c){
   if(c.cover_image_url) return c.cover_image_url;
   const text=(c.name+" "+(c.code||"")).toLowerCase();
@@ -114,7 +179,7 @@ async function loadCourses(){
 }
 async function loadCourseModules(courseId,force=false){
   if(state.modules[courseId]&&!force)return state.modules[courseId];
-  const {data,error}=await sb.from("modules").select(`id,course_id,title,description,position,lessons(id,module_id,title,description,content_type,content_url,text_content,position,created_by,created_at)`).eq("course_id",courseId).order("position",{ascending:true});
+  const {data,error}=await sb.from("modules").select(`id,course_id,title,description,position,lessons(id,module_id,title,description,content_type,content_url,text_content,support_text_html,position,created_by,created_at)`).eq("course_id",courseId).order("position",{ascending:true});
   if(error){toast("No se pudo cargar el contenido",true);return [];}
   (data||[]).forEach(m=>m.lessons=(m.lessons||[]).sort((a,b)=>(a.position||0)-(b.position||0)));
   state.modules[courseId]=data||[];return state.modules[courseId];
@@ -327,7 +392,7 @@ async function loadStaffModules(spaceId,force=false){
   if(state.staffModules[spaceId]&&!force)return state.staffModules[spaceId];
   const {data,error}=await sb.from("staff_modules").select(`
     id,space_id,title,description,position,
-    staff_lessons(id,module_id,title,description,content_type,content_url,text_content,position,created_by,created_at)
+    staff_lessons(id,module_id,title,description,content_type,content_url,text_content,support_text_html,position,created_by,created_at)
   `).eq("space_id",spaceId).order("position",{ascending:true});
   if(error){toast("No se pudo cargar el material docente",true);return [];}
   (data||[]).forEach(m=>m.staff_lessons=(m.staff_lessons||[]).sort((a,b)=>(a.position||0)-(b.position||0)));
@@ -369,7 +434,7 @@ async function staffLessonViewer(spaceId,moduleId,lessonId){
   else if(l.content_type==="pdf"){const u=await getStaffPdfSignedUrl(l.content_url);body=u?`<div class="pdf-shell"><div class="pdf-toolbar"><strong>${esc(l.title)}</strong><a class="secondary mini" href="${esc(u)}" target="_blank">Descargar PDF</a></div><iframe class="pdf-frame" src="${esc(u)}"></iframe></div>`:`<div class="empty">No se pudo abrir el PDF.</div>`;}
   else if(l.content_type==="text")body=`<div class="material-box" style="text-align:left;white-space:pre-wrap">${esc(l.text_content||"")}</div>`;
   else body=`<div class="material-box"><a class="primary" target="_blank" href="${esc(l.content_url||"#")}">Abrir material ↗</a></div>`;
-  showModal(l.title,body,async()=>true,true);
+  showModal(l.title,`${supportTextBlock(l.support_text_html)}${body}`,async()=>true,true);
 }
 function courseCard(c){
   const image=courseImage(c);
@@ -474,7 +539,7 @@ async function uploadHTML(){
   if(!isStaff())return `<div class="empty">Sin permiso.</div>`;
   let opts="";for(const c of state.courses){const mods=await loadCourseModules(c.id);for(const m of mods)opts+=`<option value="${c.id}|${m.id}">${esc(c.name)} — ${esc(m.title)}</option>`;}
   return `<div class="hero"><div><div class="brand-kicker" style="color:#7b0826">Contenido</div><h1>Subir material</h1><p>Agregá videos, documentos de Drive, textos o enlaces a los módulos de tus cursos.</p></div></div>
-  <section class="panel"><form id="uploadForm"><div class="field"><label>Curso y módulo</label><select id="upTarget" required>${opts}</select></div><div class="field"><label>Título</label><input id="upTitle" required></div><div class="field"><label>Descripción</label><textarea id="upDesc"></textarea></div><div class="field"><label>Tipo</label><select id="upType"><option value="video">Video de YouTube</option><option value="pdf">PDF</option><option value="drive">Material de Drive</option><option value="link">Otro enlace</option></select></div><div class="field" id="upUrlField"><label>Enlace</label><input id="upUrl" type="url"></div><div class="field hidden" id="upPdfField"><label>Archivo PDF</label><input id="upPdf" type="file" accept="application/pdf,.pdf"><div style="font-size:.74rem;color:var(--muted)">El PDF se guardará en el Aula Virtual y podrá leerse dentro del curso.</div></div><button class="primary">Publicar contenido</button></form></section>`;
+  <section class="panel"><form id="uploadForm"><div class="field"><label>Curso y módulo</label><select id="upTarget" required>${opts}</select></div><div class="field"><label>Título</label><input id="upTitle" required></div><div class="field"><label>Descripción</label><textarea id="upDesc"></textarea></div><div class="field"><label>Tipo</label><select id="upType"><option value="video">Video de YouTube</option><option value="pdf">PDF</option><option value="drive">Material de Drive</option><option value="link">Otro enlace</option></select></div><div class="field" id="upUrlField"><label>Enlace</label><input id="upUrl" type="url"></div><div class="field hidden" id="upPdfField"><label>Archivo PDF</label><input id="upPdf" type="file" accept="application/pdf,.pdf"><div style="font-size:.74rem;color:var(--muted)">El PDF se guardará en el Aula Virtual y podrá leerse dentro del curso.</div></div><div class="field"><label>Texto de apoyo</label>${supportEditorHTML("")}</div><button class="primary">Publicar contenido</button></form></section>`;
 }
 async function adminHTML(){
   const [{count:pc},{count:mc},{count:lc}]=await Promise.all([sb.from("profiles").select("*",{count:"exact",head:true}),sb.from("modules").select("*",{count:"exact",head:true}),sb.from("lessons").select("*",{count:"exact",head:true})]);
@@ -587,6 +652,7 @@ function showModal(title,body,onSubmit,viewer=false){
   const wrap=document.createElement("div");wrap.className="modal-backdrop";wrap.innerHTML=`<div class="modal-card"><div class="modal-head"><h2>${esc(title)}</h2><button class="modal-close">×</button></div>${viewer?`<div>${body}</div>`:`<form id="modalForm">${body}<div class="modal-actions"><button type="button" class="secondary modal-cancel">Cancelar</button><button class="primary">Guardar</button></div></form>`}</div>`;document.body.appendChild(wrap);
   const close=()=>wrap.remove();wrap.querySelector(".modal-close").onclick=close;if(wrap.querySelector(".modal-cancel"))wrap.querySelector(".modal-cancel").onclick=close;wrap.onclick=e=>{if(e.target===wrap)close();};
   if(viewer)return;
+  bindSupportEditors(wrap);
   const typeSelect=wrap.querySelector(".lesson-type-select");
   if(typeSelect){
     const syncType=()=>{
@@ -601,7 +667,7 @@ function showModal(title,body,onSubmit,viewer=false){
 }
 function courseForm(c={}){return `<div class="field"><label>Nombre</label><input name="name" required value="${esc(c.name||"")}"></div><div class="field"><label>Código / nivel</label><input name="code" value="${esc(c.code||"")}"></div><div class="field"><label>Descripción</label><textarea name="description">${esc(c.description||"")}</textarea></div><div class="field"><label>Docente</label><input name="teacher_name" value="${esc(c.teacher_name||"Córdoba Casting")}"></div><div class="field"><label>Color base</label><input name="color" type="color" value="${esc(c.color||"#7b0826")}"></div><div class="field"><label>Imagen de portada opcional (URL)</label><input name="cover_image_url" type="url" value="${esc(c.cover_image_url||"")}" placeholder="https://..."></div>`;}
 function moduleForm(m={}){return `<div class="field"><label>Título</label><input name="title" required value="${esc(m.title||"")}"></div><div class="field"><label>Descripción</label><textarea name="description">${esc(m.description||"")}</textarea></div><div class="field"><label>Orden</label><input name="position" type="number" min="1" value="${Number(m.position||1)}"></div>`;}
-function lessonForm(l={}){return `<div class="field"><label>Título</label><input name="title" required value="${esc(l.title||"")}"></div><div class="field"><label>Descripción</label><textarea name="description">${esc(l.description||"")}</textarea></div><div class="field"><label>Tipo</label><select name="content_type" class="lesson-type-select"><option value="video" ${l.content_type==="video"?"selected":""}>Video de YouTube</option><option value="pdf" ${l.content_type==="pdf"?"selected":""}>PDF</option><option value="drive" ${l.content_type==="drive"?"selected":""}>Drive</option><option value="link" ${l.content_type==="link"?"selected":""}>Enlace</option><option value="text" ${l.content_type==="text"?"selected":""}>Texto</option></select></div><div class="field lesson-url-field ${l.content_type==="pdf"||l.content_type==="text"?"hidden":""}"><label>URL</label><input name="content_url" type="url" value="${l.content_type==="pdf"?"":esc(l.content_url||"")}"></div><div class="field lesson-pdf-field ${l.content_type==="pdf"?"":"hidden"}"><label>${l.content_type==="pdf"?"Reemplazar PDF (opcional)":"Archivo PDF"}</label><input name="pdf_file" type="file" accept="application/pdf,.pdf">${l.content_type==="pdf"?`<div style="font-size:.74rem;color:var(--muted)">Si no seleccionás otro archivo, se conserva el PDF actual.</div>`:""}</div><div class="field lesson-text-field ${l.content_type==="text"?"":"hidden"}"><label>Texto</label><textarea name="text_content">${esc(l.text_content||"")}</textarea></div><div class="field"><label>Orden</label><input name="position" type="number" min="1" value="${Number(l.position||1)}"></div>`;}
+function lessonForm(l={}){return `<div class="field"><label>Título</label><input name="title" required value="${esc(l.title||"")}"></div><div class="field"><label>Descripción</label><textarea name="description">${esc(l.description||"")}</textarea></div><div class="field"><label>Tipo</label><select name="content_type" class="lesson-type-select"><option value="video" ${l.content_type==="video"?"selected":""}>Video de YouTube</option><option value="pdf" ${l.content_type==="pdf"?"selected":""}>PDF</option><option value="drive" ${l.content_type==="drive"?"selected":""}>Drive</option><option value="link" ${l.content_type==="link"?"selected":""}>Enlace</option><option value="text" ${l.content_type==="text"?"selected":""}>Texto</option></select></div><div class="field lesson-url-field ${l.content_type==="pdf"||l.content_type==="text"?"hidden":""}"><label>URL</label><input name="content_url" type="url" value="${l.content_type==="pdf"?"":esc(l.content_url||"")}"></div><div class="field lesson-pdf-field ${l.content_type==="pdf"?"":"hidden"}"><label>${l.content_type==="pdf"?"Reemplazar PDF (opcional)":"Archivo PDF"}</label><input name="pdf_file" type="file" accept="application/pdf,.pdf">${l.content_type==="pdf"?`<div style="font-size:.74rem;color:var(--muted)">Si no seleccionás otro archivo, se conserva el PDF actual.</div>`:""}</div><div class="field lesson-text-field ${l.content_type==="text"?"":"hidden"}"><label>Texto</label><textarea name="text_content">${esc(l.text_content||"")}</textarea></div><div class="field"><label>Texto de apoyo</label>${supportEditorHTML(l.support_text_html||"")}</div><div class="field"><label>Orden</label><input name="position" type="number" min="1" value="${Number(l.position||1)}"></div>`;}
 
 async function renderContent(){
   const c=document.getElementById("content");c.innerHTML=`<div class="empty">Cargando...</div>`;
@@ -619,6 +685,7 @@ async function renderContent(){
   bindContent();
 }
 function bindContent(){
+  bindSupportEditors(document);
   document.querySelectorAll(".open-course").forEach(b=>b.onclick=()=>{state.courseId=b.dataset.course;state.view="course";state.courseTab="content";renderShell();});
   document.querySelectorAll(".open-lesson").forEach(b=>b.onclick=()=>{state.courseId=b.dataset.course;state.lessonId=b.dataset.lesson;state.view="lesson";renderShell();});
   document.querySelectorAll("[data-back]").forEach(b=>b.onclick=()=>{state.view=b.dataset.back;renderShell();});
@@ -645,7 +712,7 @@ function bindContent(){
     try{
       if(type==="pdf") content_url=await uploadPdfFile(document.getElementById("upPdf").files[0],cid,mid);
       if(type!=="pdf" && !content_url){toast("Agregá un enlace.",true);return;}
-      const payload={module_id:Number(mid),title:document.getElementById("upTitle").value.trim(),description:document.getElementById("upDesc").value.trim(),content_type:type,content_url,position:(m?.lessons?.length||0)+1,created_by:state.user.id};
+      const payload={module_id:Number(mid),title:document.getElementById("upTitle").value.trim(),description:document.getElementById("upDesc").value.trim(),content_type:type,content_url,support_text_html:sanitizeSupportHtml(upload.querySelector('[name="support_text_html"]')?.value||""),position:(m?.lessons?.length||0)+1,created_by:state.user.id};
       const {error}=await sb.from("lessons").insert(payload);
       if(error){toast(error.message,true);return;}
       delete state.modules[cid];toast("Contenido publicado");upload.reset();
@@ -704,7 +771,7 @@ function bindContent(){
   document.querySelectorAll(".add-lesson").forEach(b=>b.onclick=async()=>{
     const cid=Number(b.dataset.course),mid=Number(b.dataset.module),mods=await loadCourseModules(cid),m=mods.find(x=>x.id===mid);
     showModal("Agregar contenido",lessonForm({content_type:"video",position:m.lessons.length+1}),async fd=>{
-      const p=Object.fromEntries(fd);const file=fd.get("pdf_file");delete p.pdf_file;
+      const p=Object.fromEntries(fd);const file=fd.get("pdf_file");delete p.pdf_file;p.support_text_html=sanitizeSupportHtml(p.support_text_html||"");
       p.module_id=mid;p.position=Number(p.position);p.created_by=state.user.id;
       try{
         if(p.content_type==="pdf") p.content_url=await uploadPdfFile(file,cid,mid);
@@ -719,7 +786,7 @@ function bindContent(){
   document.querySelectorAll(".edit-lesson").forEach(b=>b.onclick=async()=>{
     const cid=Number(b.dataset.course),mid=Number(b.dataset.module),mods=await loadCourseModules(cid),m=mods.find(x=>x.id===mid),l=m.lessons.find(x=>String(x.id)===b.dataset.lesson);
     showModal("Editar contenido",lessonForm(l),async fd=>{
-      const p=Object.fromEntries(fd);const file=fd.get("pdf_file");delete p.pdf_file;p.position=Number(p.position);
+      const p=Object.fromEntries(fd);const file=fd.get("pdf_file");delete p.pdf_file;p.support_text_html=sanitizeSupportHtml(p.support_text_html||"");p.position=Number(p.position);
       try{
         if(p.content_type==="pdf"){
           if(file && file.size) p.content_url=await uploadPdfFile(file,cid,mid);
@@ -753,7 +820,7 @@ function bindContent(){
   document.querySelectorAll(".add-staff-lesson").forEach(b=>b.onclick=async()=>{
     const sid=Number(b.dataset.space),mid=Number(b.dataset.module),mods=await loadStaffModules(sid),m=mods.find(x=>x.id===mid);
     showModal("Agregar contenido",lessonForm({content_type:"video",position:m.staff_lessons.length+1}),async fd=>{
-      const p=Object.fromEntries(fd),file=fd.get("pdf_file");delete p.pdf_file;p.module_id=mid;p.position=Number(p.position);p.created_by=state.user.id;
+      const p=Object.fromEntries(fd),file=fd.get("pdf_file");delete p.pdf_file;p.support_text_html=sanitizeSupportHtml(p.support_text_html||"");p.module_id=mid;p.position=Number(p.position);p.created_by=state.user.id;
       try{
         if(p.content_type==="pdf")p.content_url=await uploadStaffPdfFile(file,sid,mid);
         else if(p.content_type==="text")p.content_url=null;
@@ -766,7 +833,7 @@ function bindContent(){
   document.querySelectorAll(".edit-staff-lesson").forEach(b=>b.onclick=async()=>{
     const sid=Number(b.dataset.space),mid=Number(b.dataset.module),mods=await loadStaffModules(sid),m=mods.find(x=>x.id===mid),l=m.staff_lessons.find(x=>String(x.id)===b.dataset.lesson);
     showModal("Editar contenido",lessonForm(l),async fd=>{
-      const p=Object.fromEntries(fd),file=fd.get("pdf_file");delete p.pdf_file;p.position=Number(p.position);
+      const p=Object.fromEntries(fd),file=fd.get("pdf_file");delete p.pdf_file;p.support_text_html=sanitizeSupportHtml(p.support_text_html||"");p.position=Number(p.position);
       try{
         if(p.content_type==="pdf"){if(file&&file.size)p.content_url=await uploadStaffPdfFile(file,sid,mid);else p.content_url=l.content_type==="pdf"?l.content_url:null;if(!p.content_url){toast("Seleccioná un PDF",true);return false;}}
         else if(p.content_type==="text")p.content_url=null; else if(!p.content_url){toast("Agregá una URL",true);return false;}
@@ -870,7 +937,7 @@ loadCourseModules = async function(courseId,force=false){
   if(state.modules[courseId]&&!force)return state.modules[courseId];
   const {data,error}=await sb.from("modules").select(`
     id,course_id,title,description,position,
-    lessons(id,module_id,title,description,content_type,content_url,text_content,position,created_by,created_at),
+    lessons(id,module_id,title,description,content_type,content_url,text_content,support_text_html,position,created_by,created_at),
     quizzes(id,module_id,title,description,position,is_published,created_by,created_at)
   `).eq("course_id",courseId).order("position",{ascending:true});
   if(error){console.error(error);toast("No se pudo cargar el contenido",true);return [];}
@@ -985,7 +1052,7 @@ lessonHTML = async function(cid,lid){
 
   return `<div class="breadcrumb"><button class="lesson-view" data-course-back="${c.id}">${esc(c.name)}</button> / ${esc(module.title)}</div>
     <div class="hero"><div><div class="brand-kicker" style="color:#7b0826">${typeLabel(lesson.content_type)}</div><h1>${esc(lesson.title)}</h1><p>${esc(lesson.description||"")}</p></div></div>
-    ${completion}<section class="panel">${body}</section>`;
+    ${completion}${supportTextBlock(lesson.support_text_html)}<section class="panel">${body}</section>`;
 };
 
 /* ---------- Cuestionarios ---------- */
@@ -1173,9 +1240,9 @@ function enhancePasswordInputs(root=document){
     label.querySelector("input").onchange=e=>input.type=e.target.checked?"text":"password";
   });
 }
-const passwordObserver=new MutationObserver(()=>enhancePasswordInputs(document));
+const passwordObserver=new MutationObserver(()=>{enhancePasswordInputs(document);bindSupportEditors(document);});
 passwordObserver.observe(document.body,{childList:true,subtree:true});
-setTimeout(()=>enhancePasswordInputs(document),100);
+setTimeout(()=>{enhancePasswordInputs(document);bindSupportEditors(document);},100);
 
 /* ---------- Extensión de render / bindings ---------- */
 

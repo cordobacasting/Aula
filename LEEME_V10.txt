@@ -1,0 +1,26 @@
+AULA VIRTUAL CÓRDOBA CASTING · V10
+
+Agrega “Texto de apoyo” opcional a todos los contenidos:
+Video, PDF, Drive, enlace y texto; también Biblioteca de ejercicios y Guiones.
+
+El editor permite:
+- negrita
+- cursiva
+- subrayado
+- título
+- subtítulo
+- listas
+- cita
+- enlace
+- limpiar formato
+
+La descripción breve sigue existiendo y se usa para el listado del módulo.
+El texto de apoyo se muestra antes del material principal en una tarjeta editorial.
+
+INSTALACIÓN
+1. Supabase → SQL Editor → New query.
+2. Ejecutá `supabase_v10_support_text.sql`.
+3. Cuando dé Success, reemplazá los archivos de GitHub por esta V10.
+4. Esperá Pages y hacé Ctrl + Shift + R.
+
+Los contenidos antiguos siguen funcionando: simplemente tendrán el texto de apoyo vacío.
