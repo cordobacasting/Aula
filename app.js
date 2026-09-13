@@ -4,7 +4,7 @@ const sb = window.supabase.createClient(url, publishableKey);
 
 const state = {
   user:null, profile:null, courses:[], modules:{}, forum:{}, teachers:[], staffSpaces:[], staffModules:{},
-  view:"dashboard", courseId:null, lessonId:null, courseTab:"content"
+  view:"dashboard", courseId:null, lessonId:null, courseTab:"content", challengeDraw:null, unreadChallengeCount:0
 };
 
 const app=document.getElementById("app");
@@ -208,7 +208,9 @@ function sidebarHTML(){
   <div class="nav-section"><div class="nav-title">Aula</div>
     <button class="nav-item ${state.view==="dashboard"?"active":""}" data-view="dashboard"><span>⌂</span><span>Inicio</span></button>
     <button class="nav-item ${["courses","course","lesson"].includes(state.view)?"active":""}" data-view="courses"><span>▦</span><span>Mis cursos</span></button>
-    <button class="nav-item ${state.view==="teachers"?"active":""}" data-view="teachers"><span>★</span><span>Profes</span></button></div>`;
+    <button class="nav-item ${state.view==="teachers"?"active":""}" data-view="teachers"><span>★</span><span>Profes</span></button>
+    <button class="nav-item ${state.view==="challenges"?"active":""}" data-view="challenges"><span>⚡</span><span>Desafíos</span></button>
+    <button class="nav-item ${state.view==="notifications"?"active":""}" data-view="notifications"><span>🔔</span><span>Notificaciones</span>${state.unreadChallengeCount?`<b class="nav-badge">${state.unreadChallengeCount}</b>`:""}</button></div>`;
   if(["admin","teacher"].includes(role)) h+=`<div class="nav-section"><div class="nav-title">Material docente</div>
     <button class="nav-item ${state.view==="exercise-library"?"active":""}" data-view="exercise-library"><span>◇</span><span>Biblioteca de ejercicios</span></button>
     <button class="nav-item ${state.view==="scripts-library"?"active":""}" data-view="scripts-library"><span>▤</span><span>Guiones</span></button></div>`;
@@ -218,7 +220,8 @@ function sidebarHTML(){
   if(role==="admin") h+=`<div class="nav-section"><div class="nav-title">Administración</div>
     <button class="nav-item ${state.view==="admin"?"active":""}" data-view="admin"><span>⚙</span><span>Panel general</span></button>
     <button class="nav-item ${state.view==="users"?"active":""}" data-view="users"><span>◎</span><span>Usuarios</span></button>
-    <button class="nav-item ${state.view==="manage"?"active":""}" data-view="manage"><span>✎</span><span>Cursos y contenido</span></button></div>`;
+    <button class="nav-item ${state.view==="manage"?"active":""}" data-view="manage"><span>✎</span><span>Cursos y contenido</span></button>
+    <button class="nav-item ${state.view==="challenge-admin"?"active":""}" data-view="challenge-admin"><span>⚡</span><span>Gestionar desafíos</span></button></div>`;
   
   return h;
 }
@@ -468,20 +471,21 @@ async function loadForum(courseId,force=false){
 }
 function forumHTML(course,threads){
   const student=state.profile.role==="student";
-  return `<div class="forum-layout"><div>
-    ${threads.length?threads.map(t=>`<article class="forum-thread">
-      <div class="forum-meta"><strong>${esc(t.author?.full_name||"Alumno")}</strong><span>${new Date(t.created_at).toLocaleString("es-AR",{dateStyle:"medium",timeStyle:"short"})}</span></div>
-      <h3>${esc(t.title)}</h3><div class="forum-body">${esc(t.body)}</div>${t.link_url?`<a class="forum-link" href="${esc(t.link_url)}" target="_blank" rel="noopener">Abrir enlace ↗</a>`:""}
-      <div class="reply-list">${(t.replies||[]).length?t.replies.map(r=>`<div class="forum-reply"><strong>${esc(r.author?.full_name||"Equipo docente")} · ${esc(roleName(r.author?.role||"teacher"))}</strong><p>${esc(r.body)}</p>${r.link_url?`<a class="forum-link" href="${esc(r.link_url)}" target="_blank" rel="noopener">Abrir enlace ↗</a>`:""}</div>`).join(""):`<div style="font-size:.8rem;color:var(--muted);padding:8px 0">Todavía no hay respuesta.</div>`}</div>
-      <form class="reply-form" data-thread="${t.id}" data-course="${course.id}"><textarea name="body" required placeholder="${student?"Dejá tu respuesta o link acá...":"Responder como "+roleName(state.profile.role)+"..."}"></textarea><input name="link_url" type="url" placeholder="Link opcional: https://..." style="flex:1;border:1px solid var(--line);border-radius:10px;padding:9px"><button class="primary mini">Responder</button></form>
-    </article>`).join(""):`<div class="empty">Todavía no hay consultas en este curso.</div>`}
-  </div><aside class="forum-side"><div class="forum-composer">
-    <h3>${student?"Nueva consulta":"Nueva instancia"}</h3><p style="font-size:.8rem;color:var(--muted)">${student?"Abrí una consulta, compartí un trabajo o dejá un enlace.":"Abrí una consigna, tarea, tema de conversación o espacio para recibir trabajos y links de los alumnos."}</p><form id="newThreadForm" data-course="${course.id}">
-      <div class="field"><label>Título</label><input name="title" required maxlength="160" placeholder="${student?"Ej: Duda sobre la escena":"Ej: Entrega de monólogo — Clase 4"}"></div>
-      <div class="field"><label>${student?"Pregunta / comentario":"Consigna / descripción"}</label><textarea name="body" required></textarea></div>
-      <div class="field"><label>Enlace opcional</label><input name="link_url" type="url" placeholder="https://..."></div>
-      <button class="primary" style="width:100%">${student?"Publicar":"Abrir instancia"}</button></form>
-  </div></aside></div>`;
+  const canEditForum=isStaff();
+  const threadActions=(t)=>canEditForum?`<div class="forum-edit-actions"><button class="forum-mini-action edit-thread" data-thread="${t.id}" data-course="${course.id}" type="button">Editar publicación</button></div>`:"";
+  const replyHTML=(r)=>`<div class="forum-reply"><div class="forum-reply-head"><strong>${esc(r.author?.full_name||"Equipo docente")} · ${esc(roleName(r.author?.role||"teacher"))}</strong>${canEditForum?`<button class="forum-mini-action edit-reply" data-reply="${r.id}" data-thread="${r.thread_id}" data-course="${course.id}" type="button">Editar</button>`:""}</div><p>${esc(r.body)}</p>${r.link_url?`<a class="forum-link" href="${esc(r.link_url)}" target="_blank" rel="noopener">Abrir enlace ↗</a>`:""}</div>`;
+  return `<div class="forum-layout"><div>${threads.length?threads.map(t=>`<article class="forum-thread"><div class="forum-thread-top"><div class="forum-meta"><strong>${esc(t.author?.full_name||"Alumno")}</strong><span>${new Date(t.created_at).toLocaleString("es-AR",{dateStyle:"medium",timeStyle:"short"})}</span></div>${threadActions(t)}</div><h3>${esc(t.title)}</h3><div class="forum-body">${esc(t.body)}</div>${t.link_url?`<a class="forum-link" href="${esc(t.link_url)}" target="_blank" rel="noopener">Abrir enlace ↗</a>`:""}<div class="reply-list">${(t.replies||[]).length?t.replies.map(replyHTML).join(""):`<div style="font-size:.8rem;color:var(--muted);padding:8px 0">Todavía no hay respuesta.</div>`}</div><form class="reply-form" data-thread="${t.id}" data-course="${course.id}"><textarea name="body" required placeholder="${student?"Dejá tu respuesta o link acá...":"Responder como "+roleName(state.profile.role)+"..."}"></textarea><input name="link_url" type="url" placeholder="Link opcional: https://..." style="flex:1;border:1px solid var(--line);border-radius:10px;padding:9px"><button class="primary mini">Responder</button></form></article>`).join(""):`<div class="empty">Todavía no hay consultas en este curso.</div>`}</div><aside class="forum-side"><div class="forum-composer"><h3>${student?"Nueva consulta":"Nueva instancia"}</h3><p style="font-size:.8rem;color:var(--muted)">${student?"Abrí una consulta, compartí un trabajo o dejá un enlace.":"Abrí una consigna, tarea, tema de conversación o espacio para recibir trabajos y links de los alumnos."}</p><form id="newThreadForm" data-course="${course.id}"><div class="field"><label>Título</label><input name="title" required maxlength="160" placeholder="${student?"Ej: Duda sobre la escena":"Ej: Entrega de monólogo — Clase 4"}"></div><div class="field"><label>${student?"Pregunta / comentario":"Consigna / descripción"}</label><textarea name="body" required></textarea></div><div class="field"><label>Enlace opcional</label><input name="link_url" type="url" placeholder="https://..."></div><button class="primary" style="width:100%">${student?"Publicar":"Abrir instancia"}</button></form></div></aside></div>`;
+}
+function openForumEditModal(kind,item,courseId){
+  if(!isStaff())return;
+  const isThread=kind==="thread";
+  const body=isThread?`<div class="field"><label>Título</label><input name="title" required maxlength="160" value="${esc(item.title||"")}"></div><div class="field"><label>Texto</label><textarea name="body" required>${esc(item.body||"")}</textarea></div><div class="field"><label>Enlace opcional</label><input name="link_url" type="url" value="${esc(item.link_url||"")}" placeholder="https://..."></div>`:`<div class="field"><label>Respuesta</label><textarea name="body" required>${esc(item.body||"")}</textarea></div><div class="field"><label>Enlace opcional</label><input name="link_url" type="url" value="${esc(item.link_url||"")}" placeholder="https://..."></div>`;
+  showModal(isThread?"Editar publicación":"Editar respuesta",body,async fd=>{
+    const payload=Object.fromEntries(fd);payload.body=String(payload.body||"").trim();payload.link_url=String(payload.link_url||"").trim()||null;if(isThread)payload.title=String(payload.title||"").trim();
+    if(!payload.body||(isThread&&!payload.title)){toast("Completá los campos obligatorios.",true);return false;}
+    const table=isThread?"forum_threads":"forum_replies";const {error}=await sb.from(table).update(payload).eq("id",item.id);if(error){toast("No se pudo editar: "+error.message,true);return false;}
+    delete state.forum[Number(courseId)];toast(isThread?"Publicación actualizada":"Respuesta actualizada");renderShell();
+  });
 }
 
 async function courseHTML(id){
@@ -589,6 +593,7 @@ async function usersHTML(){
         <span class="user-chevron">⌄</span>
       </button>
       <div class="user-access-panel" data-access-panel="${p.id}">
+        ${p.role!=="admin"?`<div class="user-role-manager"><div><span class="user-access-title">Tipo de usuario</span><small>${p.role==="teacher"?"Esta persona tiene permisos docentes.":"Esta persona actualmente es alumno/a."}</small></div><button class="${p.role==="teacher"?"secondary":"gold-button"} mini change-user-role" type="button" data-user="${p.id}" data-name="${esc(p.full_name)}" data-current-role="${p.role}" data-new-role="${p.role==="teacher"?"student":"teacher"}">${p.role==="teacher"?"Pasar a alumno/a":"Convertir en profesor/a"}</button></div>`:`<div class="user-role-manager admin-locked"><div><span class="user-access-title">Tipo de usuario</span><small>Administrador · permisos totales</small></div><span class="role-lock">Protegido</span></div>`}
         <div class="user-access-title">Cursos habilitados</div>
         ${state.courses.length
           ? state.courses.map(c=>`<label class="course-check compact">
@@ -617,7 +622,7 @@ async function usersHTML(){
     <div>
       <div class="brand-kicker" style="color:#7b0826">Administración</div>
       <h1>Usuarios y accesos</h1>
-      <p>Buscá rápidamente personas y administrá los cursos a los que tienen acceso. Las cuentas nuevas se crean directamente desde Supabase.</p>
+      <p>Buscá personas, administrá sus cursos y definí quiénes son alumnos o profesores. Las cuentas nuevas se siguen creando desde Supabase.</p>
     </div>
   </div>
 
@@ -669,6 +674,111 @@ function courseForm(c={}){return `<div class="field"><label>Nombre</label><input
 function moduleForm(m={}){return `<div class="field"><label>Título</label><input name="title" required value="${esc(m.title||"")}"></div><div class="field"><label>Descripción</label><textarea name="description">${esc(m.description||"")}</textarea></div><div class="field"><label>Orden</label><input name="position" type="number" min="1" value="${Number(m.position||1)}"></div>`;}
 function lessonForm(l={}){return `<div class="field"><label>Título</label><input name="title" required value="${esc(l.title||"")}"></div><div class="field"><label>Descripción</label><textarea name="description">${esc(l.description||"")}</textarea></div><div class="field"><label>Tipo</label><select name="content_type" class="lesson-type-select"><option value="video" ${l.content_type==="video"?"selected":""}>Video de YouTube</option><option value="pdf" ${l.content_type==="pdf"?"selected":""}>PDF</option><option value="drive" ${l.content_type==="drive"?"selected":""}>Drive</option><option value="link" ${l.content_type==="link"?"selected":""}>Enlace</option><option value="text" ${l.content_type==="text"?"selected":""}>Texto</option></select></div><div class="field lesson-url-field ${l.content_type==="pdf"||l.content_type==="text"?"hidden":""}"><label>URL</label><input name="content_url" type="url" value="${l.content_type==="pdf"?"":esc(l.content_url||"")}"></div><div class="field lesson-pdf-field ${l.content_type==="pdf"?"":"hidden"}"><label>${l.content_type==="pdf"?"Reemplazar PDF (opcional)":"Archivo PDF"}</label><input name="pdf_file" type="file" accept="application/pdf,.pdf">${l.content_type==="pdf"?`<div style="font-size:.74rem;color:var(--muted)">Si no seleccionás otro archivo, se conserva el PDF actual.</div>`:""}</div><div class="field lesson-text-field ${l.content_type==="text"?"":"hidden"}"><label>Texto</label><textarea name="text_content">${esc(l.text_content||"")}</textarea></div><div class="field"><label>Texto de apoyo</label>${supportEditorHTML(l.support_text_html||"")}</div><div class="field"><label>Orden</label><input name="position" type="number" min="1" value="${Number(l.position||1)}"></div>`;}
 
+
+/* ==========================================================
+   V12 · ENTRENAMIENTO + DESAFÍOS
+   ========================================================== */
+async function loadPublishedChallenges(){
+  const {data,error}=await sb.from("challenge_cards").select("*").eq("is_published",true).order("position",{ascending:true});
+  if(error)return {data:[],error};
+  return {data:data||[],error:null};
+}
+function dbCardToDraw(c){
+  return makeDraw({db_id:c.id,category:c.category,time:c.duration_label,focus:c.focus,prompt:c.prompt,rules:Array.isArray(c.rules)?c.rules:[],lines:Array.isArray(c.dialogue_lines)?c.dialogue_lines:[]});
+}
+
+async function loadChallengeNotificationState(){
+  if(!state.user){state.unreadChallengeCount=0;return;}
+  const [{data:published},{data:seen}]=await Promise.all([
+    sb.from("challenge_cards").select("id,published_at").eq("is_published",true).not("published_at","is",null),
+    sb.from("challenge_seen").select("challenge_id").eq("user_id",state.user.id)
+  ]);
+  const seenIds=new Set((seen||[]).map(x=>String(x.challenge_id)));
+  state.unreadChallengeCount=(published||[]).filter(x=>!seenIds.has(String(x.id))).length;
+}
+
+async function markChallengeSeen(challengeId){
+  if(!state.user||!challengeId)return;
+  await sb.from("challenge_seen").upsert({
+    user_id:state.user.id,
+    challenge_id:Number(challengeId),
+    seen_at:new Date().toISOString()
+  },{onConflict:"user_id,challenge_id"});
+  await loadChallengeNotificationState();
+}
+
+async function notificationsHTML(){
+  const [{data:cards,error},{data:seen}]=await Promise.all([
+    sb.from("challenge_cards")
+      .select("id,category,duration_label,focus,prompt,published_at,is_published")
+      .eq("is_published",true)
+      .order("published_at",{ascending:false}),
+    sb.from("challenge_seen").select("challenge_id,seen_at").eq("user_id",state.user.id)
+  ]);
+  if(error)return `<div class="empty">No se pudieron cargar las notificaciones.<br>${esc(error.message)}</div>`;
+
+  const seenIds=new Set((seen||[]).map(x=>String(x.challenge_id)));
+  const unread=(cards||[]).filter(c=>!seenIds.has(String(c.id)));
+
+  return `<div class="notifications-hero">
+    <div>
+      <div class="brand-kicker">NOTIFICACIONES</div>
+      <h1>${unread.length?`${unread.length} ${unread.length===1?"novedad":"novedades"}`:"Estás al día"}</h1>
+      <p>Acá te avisamos cuando Córdoba Casting activa un nuevo desafío para la comunidad.</p>
+    </div>
+    <div class="notification-bell">🔔</div>
+  </div>
+
+  <section class="notifications-list">
+    ${(cards||[]).length?(cards||[]).map(c=>{
+      const fresh=!seenIds.has(String(c.id));
+      return `<article class="notification-card ${fresh?"unread":""}">
+        <div class="notification-dot">${fresh?"●":"✓"}</div>
+        <div class="notification-copy">
+          <div class="notification-meta">${fresh?"NUEVO DESAFÍO":"DESAFÍO"} · ${esc(c.category||"Actuación")}</div>
+          <h3>${fresh?"Hay un nuevo desafío disponible":"Desafío disponible"}</h3>
+          <p>${esc(c.prompt)}</p>
+          <small>${c.published_at?new Date(c.published_at).toLocaleDateString("es-AR",{day:"numeric",month:"long"}):""}${c.duration_label?` · ${esc(c.duration_label)}`:""}</small>
+        </div>
+        <button class="${fresh?"gold-button":"secondary"} open-notification-challenge" data-id="${c.id}" type="button">Ver desafío</button>
+      </article>`;
+    }).join(""):`<div class="empty">Todavía no hay notificaciones.</div>`}
+  </section>`;
+}
+
+async function challengesHTML(){
+  const {data,error}=await loadPublishedChallenges();
+  if(error)return `<div class="practice-hero"><div><div class="brand-kicker">DESAFÍOS</div><h1>Desafíos de cámara</h1><p>Primero ejecutá la migración V12 en Supabase para habilitar este espacio.</p></div></div><div class="empty">${esc(error.message)}</div>`;
+  if(!state.challengeDraw && data.length)state.challengeDraw=dbCardToDraw(randomOf(data));
+  const {data:attempts}=await sb.from("challenge_attempts").select("id,challenge_id,status,feedback,created_at").eq("user_id",state.user.id).order("created_at",{ascending:false}).limit(8);
+  return `<div class="practice-hero challenge-hero"><div><div class="brand-kicker">DESAFÍOS DE LA COMUNIDAD</div><h1>Una consigna. Una línea. Tu toma.</h1><p>Córdoba Casting va activando nuevos desafíos semanales. Cualquier alumno puede participar, sin importar qué curso esté haciendo.</p></div><div class="practice-orbit">⚡</div></div>
+  ${data.length?`<section class="practice-controls"><div><strong>${data.length} ${data.length===1?"desafío activo":"desafíos activos"}</strong><span> Cada desafío sortea una línea distinta para tu intento.</span></div><button class="gold-button" id="drawChallenge">Sacar desafío</button></section><div id="challengeDraw">${challengeCardHTML(state.challengeDraw,"challenge")}</div>`:`<div class="empty">Todavía no hay desafíos publicados. El administrador puede activarlos desde “Gestionar desafíos”.</div>`}
+  <section class="panel challenge-history"><div class="panel-head"><h2>Mis entregas</h2></div>${attempts?.length?attempts.map(a=>`<div class="attempt-row"><div><strong>${a.status==="reviewed"?"Con devolución":a.status==="completed"?"Completado":"Entregado"}</strong><small>${new Date(a.created_at).toLocaleDateString("es-AR")}</small></div>${a.feedback?`<p>${esc(a.feedback)}</p>`:"<span>Esperando devolución</span>"}</div>`).join(""):`<div class="empty">Todavía no entregaste desafíos.</div>`}</section>`;
+}
+
+function challengeSubmitModal(draw){
+  if(!draw?.db_id){toast("Este desafío no está publicado.",true);return;}
+  markChallengeSeen(draw.db_id);
+  showModal("Entregar desafío",`<div class="submission-summary"><span>${esc(draw.category)}</span><blockquote>“${esc(draw.line)}”</blockquote></div>
+    <div class="field"><label>Link de tu toma</label><input name="submission_url" type="url" required placeholder="https://drive.google.com/..."></div>
+    <div class="field"><label>¿Qué descubriste? <small>(opcional)</small></label><textarea name="reflection" placeholder="Una o dos líneas sobre la toma..."></textarea></div>`,async fd=>{
+      const v=Object.fromEntries(fd);
+      const {error}=await sb.from("challenge_attempts").insert({challenge_id:draw.db_id,user_id:state.user.id,dialogue_line:draw.line,submission_url:v.submission_url,reflection:v.reflection||null,status:"submitted"});
+      if(error){toast("No se pudo entregar: "+error.message,true);return false;}
+      toast("Desafío entregado ✓");state.challengeDraw=null;renderShell();
+  });
+}
+
+async function challengeAdminHTML(){
+  if(!isAdmin())return `<div class="empty">Sin permiso.</div>`;
+  const {data,error}=await sb.from("challenge_cards").select("*").order("position",{ascending:true});
+  if(error)return `<div class="empty">Ejecutá primero supabase_v12_entrenamiento_desafios.sql<br>${esc(error.message)}</div>`;
+  const {data:attempts}=await sb.from("challenge_attempts").select("id,challenge_id,user_id,dialogue_line,submission_url,reflection,status,feedback,created_at,profiles:user_id(full_name)").order("created_at",{ascending:false}).limit(30);
+  return `<div class="hero"><div><div class="brand-kicker" style="color:#7b0826">Administración</div><h1>Gestionar desafíos</h1><p>Activá el desafío de la semana o publicá varios a la vez. Cuando publicás uno, todos los alumnos reciben una notificación nueva.</p></div></div>
+  <section class="challenge-admin-grid">${(data||[]).map(c=>`<article class="challenge-admin-card ${c.is_published?"published":""}"><div><span>${esc(c.category)} · ${esc(c.duration_label||"")}</span><p>${esc(c.prompt)}</p><small>${(c.dialogue_lines||[]).length} líneas aleatorias</small></div><button class="${c.is_published?"secondary":"gold-button"} toggle-challenge" data-id="${c.id}" data-published="${c.is_published}">${c.is_published?"Pausar":"Publicar"}</button></article>`).join("")}</section>
+  <section class="panel"><div class="panel-head"><h2>Entregas recientes</h2></div>${attempts?.length?attempts.map(a=>`<div class="challenge-review-row"><div><strong>${esc(a.profiles?.full_name||"Alumno")}</strong><span>“${esc(a.dialogue_line)}”</span>${a.reflection?`<small>${esc(a.reflection)}</small>`:""}</div><div class="review-actions"><a class="secondary mini" href="${esc(a.submission_url)}" target="_blank" rel="noopener">Ver toma ↗</a><button class="primary mini review-challenge" data-id="${a.id}" data-feedback="${esc(a.feedback||"")}">${a.status==="reviewed"?"Editar devolución":"Devolver"}</button></div></div>`).join(""):`<div class="empty">Todavía no hay entregas.</div>`}</section>`;
+}
+
 async function renderContent(){
   const c=document.getElementById("content");c.innerHTML=`<div class="empty">Cargando...</div>`;
   if(state.view==="dashboard")c.innerHTML=dashboardHTML();
@@ -682,6 +792,9 @@ async function renderContent(){
   else if(state.view==="teachers")c.innerHTML=await teachersHTML();
   else if(state.view==="exercise-library")c.innerHTML=await staffLibraryHTML("exercise-library");
   else if(state.view==="scripts-library")c.innerHTML=await staffLibraryHTML("scripts");
+  else if(state.view==="challenges")c.innerHTML=await challengesHTML();
+  else if(state.view==="notifications")c.innerHTML=await notificationsHTML();
+  else if(state.view==="challenge-admin")c.innerHTML=await challengeAdminHTML();
   bindContent();
 }
 function bindContent(){
@@ -930,6 +1043,7 @@ loadAuthenticatedUser = async function(user){
   state.profile=profile;
   await loadCourses();
   await loadLearningState();
+  await loadChallengeNotificationState();
   renderShell();
 };
 
@@ -1318,6 +1432,47 @@ bindContent = function(){
     if(error){toast(error.message,true);return;}
     delete state.modules[Number(b.dataset.course)];
     await loadCourses();await loadLearningState();toast("Curso archivado");renderShell();
+  });
+
+  document.querySelectorAll(".edit-thread").forEach(btn=>btn.onclick=async()=>{if(!isStaff())return;const courseId=Number(btn.dataset.course);const threads=await loadForum(courseId);const item=threads.find(t=>String(t.id)===String(btn.dataset.thread));if(item)openForumEditModal("thread",item,courseId);});
+  document.querySelectorAll(".edit-reply").forEach(btn=>btn.onclick=async()=>{if(!isStaff())return;const courseId=Number(btn.dataset.course);const threads=await loadForum(courseId);let item=null;for(const t of threads){item=(t.replies||[]).find(r=>String(r.id)===String(btn.dataset.reply));if(item)break;}if(item)openForumEditModal("reply",item,courseId);});
+  document.querySelectorAll(".change-user-role").forEach(btn=>btn.onclick=async()=>{if(!isAdmin())return;const targetRole=btn.dataset.newRole,person=btn.dataset.name||"este usuario";const action=targetRole==="teacher"?"convertir en profesor/a":"volver a alumno/a";const extra=targetRole==="teacher"?"\\n\\nComo profesor/a podrá acceder a herramientas docentes y editar los cursos que tenga asignados.":"\\n\\nPerderá las herramientas docentes, pero conservará sus accesos a cursos.";if(!confirm(`¿Querés ${action} a “${person}”?${extra}`))return;btn.disabled=true;const {error}=await sb.rpc("admin_set_user_role",{target_user_id:btn.dataset.user,new_role:targetRole});if(error){toast("No se pudo cambiar el rol: "+error.message,true);btn.disabled=false;return;}toast(targetRole==="teacher"?"Ahora es profesor/a":"Ahora es alumno/a");renderShell();});
+
+
+  const redrawChallenge=async()=>{
+    const {data}=await loadPublishedChallenges();if(!data?.length){toast("No hay desafíos publicados.",true);return;}
+    state.challengeDraw=dbCardToDraw(randomOf(data));
+    await markChallengeSeen(state.challengeDraw.db_id);
+    renderShell();
+  };
+  document.getElementById("drawChallenge")?.addEventListener("click",redrawChallenge);
+  document.querySelector(".redraw-challenge")?.addEventListener("click",redrawChallenge);
+  document.querySelector(".open-challenge-submit")?.addEventListener("click",()=>challengeSubmitModal(state.challengeDraw));
+
+  document.querySelectorAll(".toggle-challenge").forEach(b=>b.onclick=async()=>{
+    const next=b.dataset.published!=="true";
+    const payload=next
+      ? {is_published:true,published_at:new Date().toISOString()}
+      : {is_published:false};
+    const {error}=await sb.from("challenge_cards").update(payload).eq("id",Number(b.dataset.id));
+    if(error){toast(error.message,true);return;}toast(next?"Desafío publicado":"Desafío pausado");renderShell();
+  });
+  document.querySelectorAll(".review-challenge").forEach(b=>b.onclick=()=>{
+    showModal("Devolución del desafío",`<div class="field"><label>Devolución para el alumno</label><textarea name="feedback" required>${esc(b.dataset.feedback||"")}</textarea></div>`,async fd=>{
+      const feedback=String(fd.get("feedback")||"").trim();if(!feedback)return false;
+      const {error}=await sb.from("challenge_attempts").update({feedback,status:"reviewed",reviewed_at:new Date().toISOString(),reviewed_by:state.user.id}).eq("id",Number(b.dataset.id));
+      if(error){toast(error.message,true);return false;}toast("Devolución guardada");renderShell();
+    });
+  });
+
+
+  document.querySelectorAll(".open-notification-challenge").forEach(b=>b.onclick=async()=>{
+    const id=Number(b.dataset.id);
+    await markChallengeSeen(id);
+    const {data}=await sb.from("challenge_cards").select("*").eq("id",id).single();
+    if(data)state.challengeDraw=dbCardToDraw(data);
+    state.view="challenges";
+    renderShell();
   });
 
   document.querySelectorAll(".restore-course").forEach(b=>b.onclick=async()=>{

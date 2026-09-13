@@ -1,0 +1,74 @@
+AULA VIRTUAL CÓRDOBA CASTING · V14 UNIFICADA
+
+ESTA ES LA VERSIÓN QUE TENÉS QUE USAR.
+
+Está preparada para tu situación actual:
+- NO ejecutaste V11.
+- NO ejecutaste V12.
+- NO ejecutaste V13.
+- Partís de la versión anterior del Aula que ya tenía V10.
+
+INCLUYE TODO JUNTO
+
+1. FORO
+- Profesores y administradores pueden editar publicaciones.
+- Profesores y administradores pueden editar respuestas.
+- El alumno sigue sin tener controles de edición de publicaciones ajenas.
+
+2. ROLES
+- Admin > Usuarios y accesos.
+- Podés convertir Alumno → Profesor.
+- Podés convertir Profesor → Alumno.
+- Los administradores quedan protegidos.
+- Las asignaciones a cursos no se borran al cambiar el rol.
+
+3. DESAFÍOS
+- NO incluye la sección Entrenamiento.
+- “Desafíos” es global para todos los alumnos, sin importar el curso.
+- El admin publica o pausa los desafíos.
+- Todos los desafíos iniciales arrancan PAUSADOS.
+- Vos decidís cuál convertir en el desafío semanal.
+- Al abrir un desafío se sortea una línea de diálogo.
+- El alumno entrega un link y puede sumar una reflexión.
+- El admin ve la toma y deja una devolución privada.
+
+4. NOTIFICACIONES
+- Nueva pestaña Notificaciones.
+- Cuando el admin publica un desafío se registra como novedad.
+- Los alumnos ven una insignia con la cantidad de desafíos nuevos.
+- “Ver desafío” los lleva directamente al desafío.
+- Al verlo se marca como leído.
+
+INSTALACIÓN — HACER EN ESTE ORDEN
+
+PASO 1
+Supabase > SQL Editor > New query.
+
+PASO 2
+Abrí:
+supabase_v14_UNICA.sql
+
+PASO 3
+Copiá TODO el contenido del archivo y pegalo en el SQL Editor.
+NO pegues solamente el nombre del archivo.
+
+PASO 4
+Tocá Run.
+Tiene que decir Success.
+
+PASO 5
+Recién después reemplazá en GitHub los archivos del Aula con los de esta V14.
+
+PASO 6
+Esperá el deploy de GitHub Pages y hacé:
+Ctrl + Shift + R
+
+PRIMERA PRUEBA
+1. Entrá como admin.
+2. Abrí “Gestionar desafíos”.
+3. Todos deberían aparecer pausados.
+4. Publicá UNO.
+5. Entrá con una cuenta de alumno.
+6. Debería aparecer una notificación nueva.
+7. Abrila y comprobá que lleva al desafío.
+8. Probá también editar un mensaje del foro como profesor/admin.
