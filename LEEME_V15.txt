@@ -1,0 +1,47 @@
+AULA VIRTUAL CÓRDOBA CASTING · V15 UNIFICADA
+
+NO TENÉS QUE EJECUTAR V11, V12, V13 NI V14.
+Usá solamente `supabase_v15_UNICA.sql`.
+
+CAMBIOS
+1. FORO
+- Profesores/admin pueden editar.
+- Admin puede BORRAR publicaciones completas.
+- Al borrar una publicación se borran también sus respuestas.
+- Admin también puede borrar respuestas individuales.
+
+2. DESAFÍOS
+- Admin puede crear nuevas tarjetas.
+- Admin puede editar TODO:
+  título, categoría, duración, descripción/consigna, foco, reglas,
+  frases aleatorias, orden y estado publicado/pausado.
+- Las frases se ven completas en administración.
+- Si dejás UNA sola frase, siempre saldrá esa.
+- Podés borrar una tarjeta completa.
+- Podés publicar/pausar desafíos.
+
+3. PRESENTACIÓN DE DESAFÍOS
+- El admin puede cambiar desde el Aula:
+  texto superior, título grande y descripción.
+- Por ejemplo podés reemplazar “Una consigna. Una línea. Tu toma.”
+  sin tocar código.
+
+4. SORTEO VISUAL
+- El alumno primero abre el desafío.
+- Toca “Sacar mi frase”.
+- Aparece una animación con esferas en movimiento usando el logo de Córdoba Casting.
+- El alumno toca una esfera y recién ahí se revela la frase aleatoria.
+- Puede volver a sortear si la dinámica del desafío lo permite antes de entregar.
+
+5. NOTIFICACIONES
+- Al publicar un desafío aparece como novedad para todos.
+- Los alumnos ven la insignia en Notificaciones.
+
+INSTALACIÓN
+1. Supabase > SQL Editor > New query.
+2. Abrí `supabase_v15_UNICA.sql`.
+3. Copiá TODO su contenido.
+4. Pegalo y tocá Run.
+5. Tiene que decir Success.
+6. Recién después subí esta V15 a GitHub.
+7. Esperá GitHub Pages y hacé Ctrl + Shift + R.

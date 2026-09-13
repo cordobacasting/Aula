@@ -472,8 +472,8 @@ async function loadForum(courseId,force=false){
 function forumHTML(course,threads){
   const student=state.profile.role==="student";
   const canEditForum=isStaff();
-  const threadActions=(t)=>canEditForum?`<div class="forum-edit-actions"><button class="forum-mini-action edit-thread" data-thread="${t.id}" data-course="${course.id}" type="button">Editar publicación</button></div>`:"";
-  const replyHTML=(r)=>`<div class="forum-reply"><div class="forum-reply-head"><strong>${esc(r.author?.full_name||"Equipo docente")} · ${esc(roleName(r.author?.role||"teacher"))}</strong>${canEditForum?`<button class="forum-mini-action edit-reply" data-reply="${r.id}" data-thread="${r.thread_id}" data-course="${course.id}" type="button">Editar</button>`:""}</div><p>${esc(r.body)}</p>${r.link_url?`<a class="forum-link" href="${esc(r.link_url)}" target="_blank" rel="noopener">Abrir enlace ↗</a>`:""}</div>`;
+  const threadActions=(t)=>canEditForum?`<div class="forum-edit-actions"><button class="forum-mini-action edit-thread" data-thread="${t.id}" data-course="${course.id}" type="button">Editar publicación</button>${isAdmin()?`<button class="forum-mini-action danger delete-thread" data-thread="${t.id}" data-course="${course.id}" type="button">Borrar</button>`:""}</div>`:"";
+  const replyHTML=(r)=>`<div class="forum-reply"><div class="forum-reply-head"><strong>${esc(r.author?.full_name||"Equipo docente")} · ${esc(roleName(r.author?.role||"teacher"))}</strong>${canEditForum?`<div class="forum-edit-actions"><button class="forum-mini-action edit-reply" data-reply="${r.id}" data-thread="${r.thread_id}" data-course="${course.id}" type="button">Editar</button>${isAdmin()?`<button class="forum-mini-action danger delete-reply" data-reply="${r.id}" data-course="${course.id}" type="button">Borrar</button>`:""}</div>`:""}</div><p>${esc(r.body)}</p>${r.link_url?`<a class="forum-link" href="${esc(r.link_url)}" target="_blank" rel="noopener">Abrir enlace ↗</a>`:""}</div>`;
   return `<div class="forum-layout"><div>${threads.length?threads.map(t=>`<article class="forum-thread"><div class="forum-thread-top"><div class="forum-meta"><strong>${esc(t.author?.full_name||"Alumno")}</strong><span>${new Date(t.created_at).toLocaleString("es-AR",{dateStyle:"medium",timeStyle:"short"})}</span></div>${threadActions(t)}</div><h3>${esc(t.title)}</h3><div class="forum-body">${esc(t.body)}</div>${t.link_url?`<a class="forum-link" href="${esc(t.link_url)}" target="_blank" rel="noopener">Abrir enlace ↗</a>`:""}<div class="reply-list">${(t.replies||[]).length?t.replies.map(replyHTML).join(""):`<div style="font-size:.8rem;color:var(--muted);padding:8px 0">Todavía no hay respuesta.</div>`}</div><form class="reply-form" data-thread="${t.id}" data-course="${course.id}"><textarea name="body" required placeholder="${student?"Dejá tu respuesta o link acá...":"Responder como "+roleName(state.profile.role)+"..."}"></textarea><input name="link_url" type="url" placeholder="Link opcional: https://..." style="flex:1;border:1px solid var(--line);border-radius:10px;padding:9px"><button class="primary mini">Responder</button></form></article>`).join(""):`<div class="empty">Todavía no hay consultas en este curso.</div>`}</div><aside class="forum-side"><div class="forum-composer"><h3>${student?"Nueva consulta":"Nueva instancia"}</h3><p style="font-size:.8rem;color:var(--muted)">${student?"Abrí una consulta, compartí un trabajo o dejá un enlace.":"Abrí una consigna, tarea, tema de conversación o espacio para recibir trabajos y links de los alumnos."}</p><form id="newThreadForm" data-course="${course.id}"><div class="field"><label>Título</label><input name="title" required maxlength="160" placeholder="${student?"Ej: Duda sobre la escena":"Ej: Entrega de monólogo — Clase 4"}"></div><div class="field"><label>${student?"Pregunta / comentario":"Consigna / descripción"}</label><textarea name="body" required></textarea></div><div class="field"><label>Enlace opcional</label><input name="link_url" type="url" placeholder="https://..."></div><button class="primary" style="width:100%">${student?"Publicar":"Abrir instancia"}</button></form></div></aside></div>`;
 }
 function openForumEditModal(kind,item,courseId){
@@ -678,15 +678,78 @@ function lessonForm(l={}){return `<div class="field"><label>Título</label><inpu
 /* ==========================================================
    V12 · ENTRENAMIENTO + DESAFÍOS
    ========================================================== */
+
+function randomOf(arr){return arr[Math.floor(Math.random()*arr.length)];}
+
 async function loadPublishedChallenges(){
   const {data,error}=await sb.from("challenge_cards").select("*").eq("is_published",true).order("position",{ascending:true});
   if(error)return {data:[],error};
   return {data:data||[],error:null};
 }
-function dbCardToDraw(c){
-  return makeDraw({db_id:c.id,category:c.category,time:c.duration_label,focus:c.focus,prompt:c.prompt,rules:Array.isArray(c.rules)?c.rules:[],lines:Array.isArray(c.dialogue_lines)?c.dialogue_lines:[]});
+async function loadChallengeSettings(){
+  const {data}=await sb.from("challenge_settings").select("*").eq("id",1).maybeSingle();
+  return data||{
+    kicker:"DESAFÍOS DE LA COMUNIDAD",
+    hero_title:"Una consigna. Una línea. Tu toma.",
+    hero_description:"Córdoba Casting va activando nuevos desafíos semanales. Cualquier alumno puede participar, sin importar qué curso esté haciendo."
+  };
 }
-
+function normalizeLines(v){
+  return String(v||"").split(/\r?\n/).map(x=>x.trim()).filter(Boolean);
+}
+function cardWithoutLine(c){
+  return {
+    db_id:c.id,
+    title:c.title||"Desafío",
+    category:c.category||"Actuación",
+    time:c.duration_label||"",
+    focus:c.focus||"",
+    prompt:c.prompt||"",
+    rules:Array.isArray(c.rules)?c.rules:[],
+    lines:Array.isArray(c.dialogue_lines)?c.dialogue_lines:[],
+    line:null
+  };
+}
+function challengeCardHTML(draw){
+  if(!draw)return "";
+  return `<article class="challenge-draw-card">
+    <div class="challenge-draw-top"><span>${esc(draw.category||"Desafío")}</span><span>${esc(draw.time||"")}</span></div>
+    <h2 class="challenge-card-title">${esc(draw.title||"Desafío")}</h2>
+    ${draw.line
+      ? `<div class="challenge-line-label">TU FRASE</div><blockquote class="challenge-line">“${esc(draw.line)}”</blockquote>`
+      : `<div class="challenge-no-line"><span>FRASE ALEATORIA</span><strong>Todavía no sacaste tu frase.</strong></div>`}
+    <p class="challenge-prompt">${esc(draw.prompt||"")}</p>
+    <div class="challenge-rules">${(draw.rules||[]).map(x=>`<div><span>✓</span>${esc(x)}</div>`).join("")}</div>
+    <div class="challenge-focus"><small>FOCO</small><strong>${esc(draw.focus||"")}</strong></div>
+    <div class="challenge-card-actions">
+      ${draw.line
+        ? `<button class="secondary pick-phrase" type="button">↻ Sortear otra frase</button><button class="primary open-challenge-submit" type="button">Entregar desafío</button>`
+        : `<button class="gold-button pick-phrase" type="button">Sacar mi frase</button>`}
+    </div>
+  </article>`;
+}
+function openPhrasePicker(draw){
+  if(!draw?.lines?.length){toast("Este desafío todavía no tiene frases cargadas.",true);return;}
+  const overlay=document.createElement("div");
+  overlay.className="phrase-picker-overlay";
+  const count=Math.max(7,Math.min(12,draw.lines.length*2));
+  overlay.innerHTML=`<div class="phrase-picker-box">
+    <button class="phrase-picker-close" type="button">×</button>
+    <div class="phrase-picker-copy"><span>SORTEO DE FRASE</span><h2>Elegí una esfera</h2><p>Las frases están mezcladas. Tocá una para descubrir cuál te tocó.</p></div>
+    <div class="phrase-orbit">${Array.from({length:count},(_,i)=>`<button class="phrase-ball" type="button" style="--i:${i};--n:${count}"><img src="assets/logo.png" alt=""></button>`).join("")}</div>
+  </div>`;
+  document.body.appendChild(overlay);
+  requestAnimationFrame(()=>overlay.classList.add("show"));
+  overlay.querySelector(".phrase-picker-close").onclick=()=>overlay.remove();
+  overlay.querySelectorAll(".phrase-ball").forEach(ball=>ball.onclick=()=>{
+    const selected=randomOf(draw.lines);
+    state.challengeDraw={...draw,line:selected};
+    overlay.classList.add("picked");
+    overlay.querySelector(".phrase-picker-copy").innerHTML=`<span>TU FRASE</span><h2>“${esc(selected)}”</h2><p>Esta frase queda asignada a este intento.</p>`;
+    overlay.querySelectorAll(".phrase-ball").forEach(x=>x.disabled=true);
+    setTimeout(()=>{overlay.remove();renderShell();},1100);
+  });
+}
 async function loadChallengeNotificationState(){
   if(!state.user){state.unreadChallengeCount=0;return;}
   const [{data:published},{data:seen}]=await Promise.all([
@@ -696,7 +759,6 @@ async function loadChallengeNotificationState(){
   const seenIds=new Set((seen||[]).map(x=>String(x.challenge_id)));
   state.unreadChallengeCount=(published||[]).filter(x=>!seenIds.has(String(x.id))).length;
 }
-
 async function markChallengeSeen(challengeId){
   if(!state.user||!challengeId)return;
   await sb.from("challenge_seen").upsert({
@@ -706,76 +768,119 @@ async function markChallengeSeen(challengeId){
   },{onConflict:"user_id,challenge_id"});
   await loadChallengeNotificationState();
 }
-
 async function notificationsHTML(){
   const [{data:cards,error},{data:seen}]=await Promise.all([
-    sb.from("challenge_cards")
-      .select("id,category,duration_label,focus,prompt,published_at,is_published")
-      .eq("is_published",true)
-      .order("published_at",{ascending:false}),
+    sb.from("challenge_cards").select("id,title,category,duration_label,focus,prompt,published_at,is_published").eq("is_published",true).order("published_at",{ascending:false}),
     sb.from("challenge_seen").select("challenge_id,seen_at").eq("user_id",state.user.id)
   ]);
   if(error)return `<div class="empty">No se pudieron cargar las notificaciones.<br>${esc(error.message)}</div>`;
-
   const seenIds=new Set((seen||[]).map(x=>String(x.challenge_id)));
   const unread=(cards||[]).filter(c=>!seenIds.has(String(c.id)));
-
   return `<div class="notifications-hero">
-    <div>
-      <div class="brand-kicker">NOTIFICACIONES</div>
-      <h1>${unread.length?`${unread.length} ${unread.length===1?"novedad":"novedades"}`:"Estás al día"}</h1>
-      <p>Acá te avisamos cuando Córdoba Casting activa un nuevo desafío para la comunidad.</p>
-    </div>
+    <div><div class="brand-kicker">NOTIFICACIONES</div><h1>${unread.length?`${unread.length} ${unread.length===1?"novedad":"novedades"}`:"Estás al día"}</h1><p>Acá te avisamos cuando Córdoba Casting activa un nuevo desafío para la comunidad.</p></div>
     <div class="notification-bell">🔔</div>
   </div>
-
-  <section class="notifications-list">
-    ${(cards||[]).length?(cards||[]).map(c=>{
-      const fresh=!seenIds.has(String(c.id));
-      return `<article class="notification-card ${fresh?"unread":""}">
-        <div class="notification-dot">${fresh?"●":"✓"}</div>
-        <div class="notification-copy">
-          <div class="notification-meta">${fresh?"NUEVO DESAFÍO":"DESAFÍO"} · ${esc(c.category||"Actuación")}</div>
-          <h3>${fresh?"Hay un nuevo desafío disponible":"Desafío disponible"}</h3>
-          <p>${esc(c.prompt)}</p>
-          <small>${c.published_at?new Date(c.published_at).toLocaleDateString("es-AR",{day:"numeric",month:"long"}):""}${c.duration_label?` · ${esc(c.duration_label)}`:""}</small>
-        </div>
-        <button class="${fresh?"gold-button":"secondary"} open-notification-challenge" data-id="${c.id}" type="button">Ver desafío</button>
-      </article>`;
-    }).join(""):`<div class="empty">Todavía no hay notificaciones.</div>`}
-  </section>`;
+  <section class="notifications-list">${(cards||[]).length?(cards||[]).map(c=>{
+    const fresh=!seenIds.has(String(c.id));
+    return `<article class="notification-card ${fresh?"unread":""}">
+      <div class="notification-dot">${fresh?"●":"✓"}</div>
+      <div class="notification-copy">
+        <div class="notification-meta">${fresh?"NUEVO DESAFÍO":"DESAFÍO"} · ${esc(c.category||"Actuación")}</div>
+        <h3>${esc(c.title||"Desafío disponible")}</h3>
+        <p>${esc(c.prompt)}</p>
+        <small>${c.published_at?new Date(c.published_at).toLocaleDateString("es-AR",{day:"numeric",month:"long"}):""}${c.duration_label?` · ${esc(c.duration_label)}`:""}</small>
+      </div>
+      <button class="${fresh?"gold-button":"secondary"} open-notification-challenge" data-id="${c.id}" type="button">Ver desafío</button>
+    </article>`;
+  }).join(""):`<div class="empty">Todavía no hay notificaciones.</div>`}</section>`;
 }
-
 async function challengesHTML(){
-  const {data,error}=await loadPublishedChallenges();
-  if(error)return `<div class="practice-hero"><div><div class="brand-kicker">DESAFÍOS</div><h1>Desafíos de cámara</h1><p>Primero ejecutá la migración V12 en Supabase para habilitar este espacio.</p></div></div><div class="empty">${esc(error.message)}</div>`;
-  if(!state.challengeDraw && data.length)state.challengeDraw=dbCardToDraw(randomOf(data));
+  const [{data,error},settings]=await Promise.all([loadPublishedChallenges(),loadChallengeSettings()]);
+  if(error)return `<div class="empty">No se pudieron cargar los desafíos.<br>${esc(error.message)}</div>`;
+  if(!state.challengeDraw && data.length)state.challengeDraw=cardWithoutLine(data[0]);
+  if(state.challengeDraw && !data.some(x=>String(x.id)===String(state.challengeDraw.db_id)))state.challengeDraw=data.length?cardWithoutLine(data[0]):null;
   const {data:attempts}=await sb.from("challenge_attempts").select("id,challenge_id,status,feedback,created_at").eq("user_id",state.user.id).order("created_at",{ascending:false}).limit(8);
-  return `<div class="practice-hero challenge-hero"><div><div class="brand-kicker">DESAFÍOS DE LA COMUNIDAD</div><h1>Una consigna. Una línea. Tu toma.</h1><p>Córdoba Casting va activando nuevos desafíos semanales. Cualquier alumno puede participar, sin importar qué curso esté haciendo.</p></div><div class="practice-orbit">⚡</div></div>
-  ${data.length?`<section class="practice-controls"><div><strong>${data.length} ${data.length===1?"desafío activo":"desafíos activos"}</strong><span> Cada desafío sortea una línea distinta para tu intento.</span></div><button class="gold-button" id="drawChallenge">Sacar desafío</button></section><div id="challengeDraw">${challengeCardHTML(state.challengeDraw,"challenge")}</div>`:`<div class="empty">Todavía no hay desafíos publicados. El administrador puede activarlos desde “Gestionar desafíos”.</div>`}
+  return `<div class="practice-hero challenge-hero"><div><div class="brand-kicker">${esc(settings.kicker||"DESAFÍOS")}</div><h1>${esc(settings.hero_title||"Desafíos")}</h1><p>${esc(settings.hero_description||"")}</p></div><div class="practice-orbit">⚡</div></div>
+  ${data.length?`<section class="practice-controls"><div><strong>${data.length} ${data.length===1?"desafío activo":"desafíos activos"}</strong><span> Elegí uno y después sorteá tu frase.</span></div>${data.length>1?`<select id="activeChallengeSelect">${data.map(c=>`<option value="${c.id}" ${String(state.challengeDraw?.db_id)===String(c.id)?"selected":""}>${esc(c.title||c.category||"Desafío")}</option>`).join("")}</select>`:""}</section><div id="challengeDraw">${challengeCardHTML(state.challengeDraw)}</div>`:`<div class="empty">Todavía no hay desafíos publicados.</div>`}
   <section class="panel challenge-history"><div class="panel-head"><h2>Mis entregas</h2></div>${attempts?.length?attempts.map(a=>`<div class="attempt-row"><div><strong>${a.status==="reviewed"?"Con devolución":a.status==="completed"?"Completado":"Entregado"}</strong><small>${new Date(a.created_at).toLocaleDateString("es-AR")}</small></div>${a.feedback?`<p>${esc(a.feedback)}</p>`:"<span>Esperando devolución</span>"}</div>`).join(""):`<div class="empty">Todavía no entregaste desafíos.</div>`}</section>`;
 }
-
 function challengeSubmitModal(draw){
-  if(!draw?.db_id){toast("Este desafío no está publicado.",true);return;}
+  if(!draw?.db_id||!draw?.line){toast("Primero sacá una frase.",true);return;}
   markChallengeSeen(draw.db_id);
-  showModal("Entregar desafío",`<div class="submission-summary"><span>${esc(draw.category)}</span><blockquote>“${esc(draw.line)}”</blockquote></div>
+  showModal("Entregar desafío",`<div class="submission-summary"><span>${esc(draw.title||draw.category)}</span><blockquote>“${esc(draw.line)}”</blockquote></div>
     <div class="field"><label>Link de tu toma</label><input name="submission_url" type="url" required placeholder="https://drive.google.com/..."></div>
     <div class="field"><label>¿Qué descubriste? <small>(opcional)</small></label><textarea name="reflection" placeholder="Una o dos líneas sobre la toma..."></textarea></div>`,async fd=>{
       const v=Object.fromEntries(fd);
       const {error}=await sb.from("challenge_attempts").insert({challenge_id:draw.db_id,user_id:state.user.id,dialogue_line:draw.line,submission_url:v.submission_url,reflection:v.reflection||null,status:"submitted"});
       if(error){toast("No se pudo entregar: "+error.message,true);return false;}
-      toast("Desafío entregado ✓");state.challengeDraw=null;renderShell();
+      toast("Desafío entregado ✓");state.challengeDraw={...draw,line:null};renderShell();
   });
 }
-
+function challengeEditorModal(card=null){
+  if(!isAdmin())return;
+  const editing=!!card;
+  const rules=(card?.rules||[]).join("\n");
+  const lines=(card?.dialogue_lines||[]).join("\n");
+  showModal(editing?"Editar desafío":"Nuevo desafío",`<div class="challenge-editor-grid">
+    <div class="field wide"><label>Título del desafío</label><input name="title" required value="${esc(card?.title||"")}" placeholder="Ej: La espera"></div>
+    <div class="field"><label>Categoría</label><input name="category" required value="${esc(card?.category||"Cámara")}"></div>
+    <div class="field"><label>Duración</label><input name="duration_label" value="${esc(card?.duration_label||"10 min")}"></div>
+    <div class="field wide"><label>Descripción / consigna</label><textarea name="prompt" required>${esc(card?.prompt||"")}</textarea></div>
+    <div class="field wide"><label>Foco</label><input name="focus" required value="${esc(card?.focus||"")}"></div>
+    <div class="field wide"><label>Reglas <small>una por línea</small></label><textarea name="rules_text">${esc(rules)}</textarea></div>
+    <div class="field wide"><label>Frases aleatorias <small>una por línea</small></label><textarea name="lines_text" class="challenge-lines-editor" required>${esc(lines)}</textarea><small>Si querés que siempre salga la misma frase, dejá una sola.</small></div>
+    <div class="field"><label>Orden</label><input name="position" type="number" min="1" value="${Number(card?.position||1)}"></div>
+    <label class="challenge-publish-check"><input type="checkbox" name="is_published" ${card?.is_published?"checked":""}> Publicado para alumnos</label>
+  </div>`,async fd=>{
+    const v=Object.fromEntries(fd);
+    const dialogue_lines=normalizeLines(v.lines_text);
+    if(!dialogue_lines.length){toast("Agregá al menos una frase.",true);return false;}
+    const publishing=v.is_published==="on";
+    const payload={
+      title:String(v.title||"").trim(),
+      category:String(v.category||"").trim(),
+      duration_label:String(v.duration_label||"").trim()||null,
+      prompt:String(v.prompt||"").trim(),
+      focus:String(v.focus||"").trim(),
+      rules:normalizeLines(v.rules_text),
+      dialogue_lines,
+      position:Number(v.position||1),
+      is_published:publishing
+    };
+    if(publishing&&!card?.is_published)payload.published_at=new Date().toISOString();
+    if(!publishing)payload.published_at=card?.published_at||null;
+    const query=editing?sb.from("challenge_cards").update(payload).eq("id",card.id):sb.from("challenge_cards").insert(payload);
+    const {error}=await query;
+    if(error){toast("No se pudo guardar: "+error.message,true);return false;}
+    toast(editing?"Desafío actualizado":"Desafío creado");state.challengeDraw=null;renderShell();
+  });
+}
+async function challengeHeroEditor(){
+  if(!isAdmin())return;
+  const s=await loadChallengeSettings();
+  showModal("Editar presentación de Desafíos",`<div class="field"><label>Texto superior</label><input name="kicker" value="${esc(s.kicker||"")}"></div><div class="field"><label>Título principal</label><input name="hero_title" required value="${esc(s.hero_title||"")}"></div><div class="field"><label>Descripción</label><textarea name="hero_description" required>${esc(s.hero_description||"")}</textarea></div>`,async fd=>{
+    const v=Object.fromEntries(fd);
+    const {error}=await sb.from("challenge_settings").upsert({id:1,kicker:String(v.kicker||"").trim(),hero_title:String(v.hero_title||"").trim(),hero_description:String(v.hero_description||"").trim(),updated_at:new Date().toISOString()});
+    if(error){toast(error.message,true);return false;}
+    toast("Presentación actualizada");renderShell();
+  });
+}
 async function challengeAdminHTML(){
   if(!isAdmin())return `<div class="empty">Sin permiso.</div>`;
-  const {data,error}=await sb.from("challenge_cards").select("*").order("position",{ascending:true});
-  if(error)return `<div class="empty">Ejecutá primero supabase_v12_entrenamiento_desafios.sql<br>${esc(error.message)}</div>`;
+  const [{data,error},settings]=await Promise.all([
+    sb.from("challenge_cards").select("*").order("position",{ascending:true}),
+    loadChallengeSettings()
+  ]);
+  if(error)return `<div class="empty">Ejecutá primero supabase_v15_UNICA.sql.<br>${esc(error.message)}</div>`;
   const {data:attempts}=await sb.from("challenge_attempts").select("id,challenge_id,user_id,dialogue_line,submission_url,reflection,status,feedback,created_at,profiles:user_id(full_name)").order("created_at",{ascending:false}).limit(30);
-  return `<div class="hero"><div><div class="brand-kicker" style="color:#7b0826">Administración</div><h1>Gestionar desafíos</h1><p>Activá el desafío de la semana o publicá varios a la vez. Cuando publicás uno, todos los alumnos reciben una notificación nueva.</p></div></div>
-  <section class="challenge-admin-grid">${(data||[]).map(c=>`<article class="challenge-admin-card ${c.is_published?"published":""}"><div><span>${esc(c.category)} · ${esc(c.duration_label||"")}</span><p>${esc(c.prompt)}</p><small>${(c.dialogue_lines||[]).length} líneas aleatorias</small></div><button class="${c.is_published?"secondary":"gold-button"} toggle-challenge" data-id="${c.id}" data-published="${c.is_published}">${c.is_published?"Pausar":"Publicar"}</button></article>`).join("")}</section>
+  return `<div class="hero"><div><div class="brand-kicker" style="color:#7b0826">Administración</div><h1>Gestionar desafíos</h1><p>Creá tarjetas, editá toda la consigna y sus frases, y decidí cuál está activo para los alumnos.</p></div><div class="hero-actions"><button class="secondary edit-challenge-hero">Editar presentación</button><button class="primary new-challenge">+ Nuevo desafío</button></div></div>
+  <div class="challenge-admin-message"><small>ASÍ LO VEN LOS ALUMNOS</small><strong>${esc(settings.hero_title||"")}</strong><span>${esc(settings.hero_description||"")}</span></div>
+  <section class="challenge-admin-grid">${(data||[]).map(c=>`<article class="challenge-admin-card ${c.is_published?"published":""}">
+    <div><span>${esc(c.category)} · ${esc(c.duration_label||"")}</span><h3>${esc(c.title||"Desafío")}</h3><p>${esc(c.prompt)}</p>
+      <div class="admin-lines-preview"><small>FRASES (${(c.dialogue_lines||[]).length})</small>${(c.dialogue_lines||[]).slice(0,5).map(x=>`<em>“${esc(x)}”</em>`).join("")}${(c.dialogue_lines||[]).length>5?`<b>+ ${(c.dialogue_lines||[]).length-5} más</b>`:""}</div>
+    </div>
+    <div class="challenge-admin-actions"><button class="secondary edit-challenge" data-id="${c.id}">Editar todo</button><button class="${c.is_published?"secondary":"gold-button"} toggle-challenge" data-id="${c.id}" data-published="${c.is_published}">${c.is_published?"Pausar":"Publicar"}</button><button class="danger-button delete-challenge" data-id="${c.id}" data-title="${esc(c.title||"Desafío")}">Borrar</button></div>
+  </article>`).join("")}</section>
   <section class="panel"><div class="panel-head"><h2>Entregas recientes</h2></div>${attempts?.length?attempts.map(a=>`<div class="challenge-review-row"><div><strong>${esc(a.profiles?.full_name||"Alumno")}</strong><span>“${esc(a.dialogue_line)}”</span>${a.reflection?`<small>${esc(a.reflection)}</small>`:""}</div><div class="review-actions"><a class="secondary mini" href="${esc(a.submission_url)}" target="_blank" rel="noopener">Ver toma ↗</a><button class="primary mini review-challenge" data-id="${a.id}" data-feedback="${esc(a.feedback||"")}">${a.status==="reviewed"?"Editar devolución":"Devolver"}</button></div></div>`).join(""):`<div class="empty">Todavía no hay entregas.</div>`}</section>`;
 }
 
@@ -1436,26 +1541,49 @@ bindContent = function(){
 
   document.querySelectorAll(".edit-thread").forEach(btn=>btn.onclick=async()=>{if(!isStaff())return;const courseId=Number(btn.dataset.course);const threads=await loadForum(courseId);const item=threads.find(t=>String(t.id)===String(btn.dataset.thread));if(item)openForumEditModal("thread",item,courseId);});
   document.querySelectorAll(".edit-reply").forEach(btn=>btn.onclick=async()=>{if(!isStaff())return;const courseId=Number(btn.dataset.course);const threads=await loadForum(courseId);let item=null;for(const t of threads){item=(t.replies||[]).find(r=>String(r.id)===String(btn.dataset.reply));if(item)break;}if(item)openForumEditModal("reply",item,courseId);});
+  document.querySelectorAll(".delete-thread").forEach(btn=>btn.onclick=async()=>{
+    if(!isAdmin())return;
+    if(!confirm("¿Borrar esta publicación del foro? También se borrarán todas sus respuestas. Esta acción no se puede deshacer."))return;
+    const courseId=Number(btn.dataset.course);
+    const {error}=await sb.from("forum_threads").delete().eq("id",Number(btn.dataset.thread));
+    if(error){toast("No se pudo borrar: "+error.message,true);return;}
+    delete state.forum[courseId];toast("Publicación borrada");renderShell();
+  });
+  document.querySelectorAll(".delete-reply").forEach(btn=>btn.onclick=async()=>{
+    if(!isAdmin())return;
+    if(!confirm("¿Borrar esta respuesta? Esta acción no se puede deshacer."))return;
+    const courseId=Number(btn.dataset.course);
+    const {error}=await sb.from("forum_replies").delete().eq("id",Number(btn.dataset.reply));
+    if(error){toast("No se pudo borrar: "+error.message,true);return;}
+    delete state.forum[courseId];toast("Respuesta borrada");renderShell();
+  });
+
   document.querySelectorAll(".change-user-role").forEach(btn=>btn.onclick=async()=>{if(!isAdmin())return;const targetRole=btn.dataset.newRole,person=btn.dataset.name||"este usuario";const action=targetRole==="teacher"?"convertir en profesor/a":"volver a alumno/a";const extra=targetRole==="teacher"?"\\n\\nComo profesor/a podrá acceder a herramientas docentes y editar los cursos que tenga asignados.":"\\n\\nPerderá las herramientas docentes, pero conservará sus accesos a cursos.";if(!confirm(`¿Querés ${action} a “${person}”?${extra}`))return;btn.disabled=true;const {error}=await sb.rpc("admin_set_user_role",{target_user_id:btn.dataset.user,new_role:targetRole});if(error){toast("No se pudo cambiar el rol: "+error.message,true);btn.disabled=false;return;}toast(targetRole==="teacher"?"Ahora es profesor/a":"Ahora es alumno/a");renderShell();});
 
 
-  const redrawChallenge=async()=>{
-    const {data}=await loadPublishedChallenges();if(!data?.length){toast("No hay desafíos publicados.",true);return;}
-    state.challengeDraw=dbCardToDraw(randomOf(data));
-    await markChallengeSeen(state.challengeDraw.db_id);
-    renderShell();
-  };
-  document.getElementById("drawChallenge")?.addEventListener("click",redrawChallenge);
-  document.querySelector(".redraw-challenge")?.addEventListener("click",redrawChallenge);
+  document.getElementById("activeChallengeSelect")?.addEventListener("change",async e=>{
+    const {data}=await sb.from("challenge_cards").select("*").eq("id",Number(e.target.value)).single();
+    if(data){state.challengeDraw=cardWithoutLine(data);await markChallengeSeen(data.id);renderShell();}
+  });
+  document.querySelector(".pick-phrase")?.addEventListener("click",()=>openPhrasePicker(state.challengeDraw));
   document.querySelector(".open-challenge-submit")?.addEventListener("click",()=>challengeSubmitModal(state.challengeDraw));
 
+  document.querySelector(".new-challenge")?.addEventListener("click",()=>challengeEditorModal());
+  document.querySelector(".edit-challenge-hero")?.addEventListener("click",()=>challengeHeroEditor());
+  document.querySelectorAll(".edit-challenge").forEach(b=>b.onclick=async()=>{
+    const {data,error}=await sb.from("challenge_cards").select("*").eq("id",Number(b.dataset.id)).single();
+    if(error){toast(error.message,true);return;}challengeEditorModal(data);
+  });
+  document.querySelectorAll(".delete-challenge").forEach(b=>b.onclick=async()=>{
+    if(!confirm(`¿Borrar “${b.dataset.title}”? También se borrarán sus entregas asociadas. Esta acción no se puede deshacer.`))return;
+    const {error}=await sb.from("challenge_cards").delete().eq("id",Number(b.dataset.id));
+    if(error){toast(error.message,true);return;}toast("Desafío borrado");state.challengeDraw=null;renderShell();
+  });
   document.querySelectorAll(".toggle-challenge").forEach(b=>b.onclick=async()=>{
     const next=b.dataset.published!=="true";
-    const payload=next
-      ? {is_published:true,published_at:new Date().toISOString()}
-      : {is_published:false};
+    const payload=next?{is_published:true,published_at:new Date().toISOString()}:{is_published:false};
     const {error}=await sb.from("challenge_cards").update(payload).eq("id",Number(b.dataset.id));
-    if(error){toast(error.message,true);return;}toast(next?"Desafío publicado":"Desafío pausado");renderShell();
+    if(error){toast(error.message,true);return;}toast(next?"Desafío publicado":"Desafío pausado");state.challengeDraw=null;renderShell();
   });
   document.querySelectorAll(".review-challenge").forEach(b=>b.onclick=()=>{
     showModal("Devolución del desafío",`<div class="field"><label>Devolución para el alumno</label><textarea name="feedback" required>${esc(b.dataset.feedback||"")}</textarea></div>`,async fd=>{
@@ -1465,12 +1593,11 @@ bindContent = function(){
     });
   });
 
-
   document.querySelectorAll(".open-notification-challenge").forEach(b=>b.onclick=async()=>{
     const id=Number(b.dataset.id);
     await markChallengeSeen(id);
     const {data}=await sb.from("challenge_cards").select("*").eq("id",id).single();
-    if(data)state.challengeDraw=dbCardToDraw(data);
+    if(data)state.challengeDraw=cardWithoutLine(data);
     state.view="challenges";
     renderShell();
   });

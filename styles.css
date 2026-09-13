@@ -514,3 +514,49 @@ body{background:
   .notification-card{grid-template-columns:auto 1fr}
   .notification-card button{grid-column:1/-1;width:100%}
 }
+
+/* ==========================================================
+   V15 · DESAFÍOS EDITABLES + SORTEO VISUAL
+   ========================================================== */
+.forum-mini-action.danger{color:#981832;border-color:#e4b9c3;background:#fff5f7}
+.hero-actions{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.challenge-card-title{font-size:1.35rem;margin:10px 0 4px;color:#2f2227}
+.challenge-no-line{display:grid;gap:4px;margin:18px 0;padding:17px;border:1px dashed #d9bd78;border-radius:14px;background:#fffaf0}
+.challenge-no-line span{font-size:.62rem;font-weight:950;letter-spacing:.09em;color:#a27b2b}
+.challenge-no-line strong{font-size:.95rem;color:#4c3c2d}
+.challenge-admin-message{display:grid;gap:4px;padding:16px 18px;margin-bottom:16px;border-radius:15px;background:linear-gradient(135deg,#f7f0f3,#f4efe6);border:1px solid var(--line)}
+.challenge-admin-message small{font-size:.6rem;font-weight:950;letter-spacing:.08em;color:#8a6a25}
+.challenge-admin-message strong{font-size:1.05rem;color:#4d0c22}
+.challenge-admin-message span{font-size:.78rem;color:#62565a}
+.challenge-admin-card h3{font-size:1rem;margin:7px 0}
+.challenge-admin-actions{display:flex;gap:6px;flex-wrap:wrap}
+.danger-button{border:1px solid #ddb1bd;background:#fff4f6;color:#92152f;border-radius:9px;padding:8px 10px;font-weight:850;cursor:pointer}
+.admin-lines-preview{display:grid;gap:4px;margin-top:12px;padding:10px;border-radius:10px;background:#f8f5f6}
+.admin-lines-preview small{font-size:.58rem;font-weight:900;color:#7650c8;letter-spacing:.07em}
+.admin-lines-preview em{font-size:.72rem;font-style:normal;color:#574a4e}
+.admin-lines-preview b{font-size:.65rem;color:#8f7f84}
+.challenge-editor-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.challenge-editor-grid .wide{grid-column:1/-1}
+.challenge-lines-editor{min-height:155px}
+.challenge-publish-check{display:flex;align-items:center;gap:8px;font-size:.8rem;font-weight:800}
+.phrase-picker-overlay{position:fixed;inset:0;z-index:9999;display:grid;place-items:center;padding:20px;background:rgba(17,10,13,.8);backdrop-filter:blur(8px);opacity:0;transition:.25s ease}
+.phrase-picker-overlay.show{opacity:1}
+.phrase-picker-box{position:relative;width:min(720px,94vw);min-height:520px;border-radius:30px;overflow:hidden;background:radial-gradient(circle at 50% 45%,#78223d 0,#351522 42%,#171315 78%);color:#fff;box-shadow:0 30px 90px rgba(0,0,0,.45)}
+.phrase-picker-close{position:absolute;z-index:5;right:18px;top:14px;width:36px;height:36px;border-radius:50%;border:1px solid rgba(255,255,255,.2);background:rgba(255,255,255,.08);color:#fff;font-size:1.3rem;cursor:pointer}
+.phrase-picker-copy{position:absolute;z-index:3;left:50%;top:50%;transform:translate(-50%,-50%);width:min(370px,70%);text-align:center;pointer-events:none}
+.phrase-picker-copy span{font-size:.65rem;letter-spacing:.15em;font-weight:950;color:#e0b855}
+.phrase-picker-copy h2{font-size:2rem;line-height:1.12;margin:8px 0;color:#fff}
+.phrase-picker-copy p{font-size:.8rem;color:#ded2d6;margin:0}
+.phrase-orbit{position:absolute;inset:0;animation:orbitWhole 12s linear infinite}
+.phrase-ball{--angle:calc(360deg / var(--n) * var(--i));position:absolute;left:50%;top:50%;width:72px;height:72px;margin:-36px;border-radius:50%;border:1px solid rgba(255,255,255,.28);background:linear-gradient(145deg,#a33f5e,#4e1429);box-shadow:0 10px 25px rgba(0,0,0,.3),inset 0 1px rgba(255,255,255,.18);cursor:pointer;transform:rotate(var(--angle)) translateX(230px) rotate(calc(-1 * var(--angle)));transition:.18s}
+.phrase-ball:hover{scale:1.12;filter:brightness(1.16)}
+.phrase-ball img{width:70%;height:70%;object-fit:contain;filter:brightness(0) invert(1);pointer-events:none}
+.phrase-picker-overlay.picked .phrase-orbit{animation-duration:1s;filter:blur(2px);opacity:.5;transition:.5s}
+@keyframes orbitWhole{to{transform:rotate(360deg)}}
+@media(max-width:700px){
+  .challenge-editor-grid{grid-template-columns:1fr}.challenge-editor-grid .wide{grid-column:auto}
+  .phrase-picker-box{min-height:470px}
+  .phrase-ball{width:58px;height:58px;margin:-29px;transform:rotate(var(--angle)) translateX(150px) rotate(calc(-1 * var(--angle)))}
+  .phrase-picker-copy h2{font-size:1.55rem}
+  .hero-actions{width:100%}.hero-actions button{flex:1}
+}
