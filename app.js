@@ -558,7 +558,7 @@ async function usersHTML(){
 
   const {data:profiles,error}=await sb
     .from("profiles")
-    .select("id,full_name,role,avatar_key,created_at")
+    .select("id,full_name,email,role,avatar_key,created_at")
     .order("created_at");
 
   if(error)return `<div class="empty">No se pudieron cargar los usuarios.</div>`;
@@ -583,11 +583,12 @@ async function usersHTML(){
       ? userCourses.slice(0,2).map(c=>esc(c.code||c.name)).join(" · ") + (userCourses.length>2?` +${userCourses.length-2}`:"")
       : "Sin cursos asignados";
 
-    return `<article class="user-mini-card" data-user-search="${esc((p.full_name||"").toLowerCase())}">
+    return `<article class="user-mini-card" data-user-search="${esc(((p.full_name||"")+" "+(p.email||"")).toLowerCase())}">
       <button class="user-mini-main user-toggle-access" data-user="${p.id}" type="button">
         ${avatarHTML(p.avatar_key,p.full_name,"user-mini-avatar")}
         <span class="user-mini-copy">
           <strong>${esc(p.full_name)}</strong>
+          ${p.email?`<small class="user-email">${esc(p.email)}</small>`:""}
           <small>${esc(courseSummary)}</small>
         </span>
         <span class="user-chevron">⌄</span>
@@ -622,13 +623,14 @@ async function usersHTML(){
     <div>
       <div class="brand-kicker" style="color:#7b0826">Administración</div>
       <h1>Usuarios y accesos</h1>
-      <p>Buscá personas, administrá sus cursos y definí quiénes son alumnos o profesores. Las cuentas nuevas se siguen creando desde Supabase.</p>
+      <p>Creá alumnos y profesores desde el Aula, asignales cursos y administrá sus accesos.</p>
     </div>
+    <button class="primary" id="newUser">+ Nuevo usuario</button>
   </div>
 
   <div class="user-search-wrap">
     <span class="user-search-icon">⌕</span>
-    <input id="userSearch" type="search" placeholder="Buscar usuario por nombre..." autocomplete="off">
+    <input id="userSearch" type="search" placeholder="Buscar por nombre o email..." autocomplete="off">
     <button id="clearUserSearch" class="user-search-clear hidden" type="button">×</button>
   </div>
   <div id="userSearchStatus" class="user-search-status"></div>
@@ -638,6 +640,44 @@ async function usersHTML(){
     ${group("teacher","Profesores","Equipo docente y cursos asignados")}
     ${group("student","Alumnos","Usuarios inscriptos en cursos")}
   </div>`;
+}
+
+function newUserForm(){
+  const courseOptions=state.courses.length
+    ? state.courses.map(c=>`<label class="course-check compact new-user-course"><input type="checkbox" name="course_ids" value="${c.id}"><span><strong>${esc(c.name)}</strong><small>${esc(c.code||"")}</small></span></label>`).join("")
+    : `<div class="empty compact-empty">No hay cursos activos.</div>`;
+  return `<div class="new-user-form">
+    <div class="field"><label>Nombre y apellido</label><input name="full_name" required autocomplete="off" placeholder="Ej. Martina López"></div>
+    <div class="field"><label>Email</label><input name="email" type="email" required autocomplete="off" placeholder="alumno@email.com"></div>
+    <div class="field"><label>Tipo de usuario</label><select name="role"><option value="student">Alumno/a</option><option value="teacher">Profesor/a</option></select></div>
+    <div class="field"><label>Clave de acceso</label><div class="password-inline"><input id="newUserPassword" name="password" type="password" minlength="6" required autocomplete="new-password" placeholder="Mínimo 6 caracteres"><button class="secondary mini" id="toggleNewUserPassword" type="button">Mostrar</button></div><div class="field-hint">Podés usar la misma clave para todo un curso. Seguirá funcionando hasta que cada usuario decida cambiarla.</div></div>
+    <div class="field"><label>Cursos habilitados</label><div class="new-user-course-list">${courseOptions}</div><div class="field-hint">Podés crear la cuenta sin cursos y asignarlos después.</div></div>
+  </div>`;
+}
+
+function showCreatedUserAccess(fullName,email,password){
+  const wrap=document.createElement("div");
+  wrap.className="modal-backdrop";
+  wrap.innerHTML=`<div class="modal-card auth-modal created-user-modal">
+    <div class="modal-head"><div><h2>Usuario creado</h2><p>La cuenta ya puede ingresar al Aula Virtual.</p></div><button class="modal-close">×</button></div>
+    <div class="created-user-access">
+      <div><span>Nombre</span><strong>${esc(fullName)}</strong></div>
+      <div><span>Email</span><strong>${esc(email)}</strong></div>
+      <div><span>Clave de acceso</span><strong class="created-password">${esc(password)}</strong></div>
+    </div>
+    <div class="field-hint">La clave queda activa hasta que el usuario la cambie desde su perfil o mediante recuperación por email.</div>
+    <div class="modal-actions"><button type="button" class="secondary" id="copyCreatedAccess">Copiar acceso</button><button type="button" class="primary modal-done">Listo</button></div>
+  </div>`;
+  document.body.appendChild(wrap);
+  const close=()=>wrap.remove();
+  wrap.querySelector(".modal-close").onclick=close;
+  wrap.querySelector(".modal-done").onclick=close;
+  wrap.onclick=e=>{if(e.target===wrap)close();};
+  wrap.querySelector("#copyCreatedAccess").onclick=async()=>{
+    const text=`Córdoba Casting · Aula Virtual\nUsuario: ${email}\nClave: ${password}\nhttps://aula.cordobacasting.com`;
+    try{await navigator.clipboard.writeText(text);toast("Datos de acceso copiados");}
+    catch{toast("No se pudo copiar automáticamente",true);}
+  };
 }
 
 function manageModuleHTML(c,m,i){
@@ -941,6 +981,36 @@ function bindContent(){
   const nt=document.getElementById("newThreadForm");
   if(nt)nt.onsubmit=async e=>{e.preventDefault();const fd=new FormData(e.target);const payload=Object.fromEntries(fd);payload.course_id=Number(e.target.dataset.course);payload.user_id=state.user.id;if(!payload.link_url)payload.link_url=null;const {error}=await sb.from("forum_threads").insert(payload);if(error){toast("No se pudo publicar: "+error.message,true);return;}delete state.forum[payload.course_id];toast("Consulta publicada");renderShell();};
   document.querySelectorAll(".reply-form").forEach(f=>f.onsubmit=async e=>{e.preventDefault();const fd=new FormData(e.target);const body=fd.get("body");const link_url=fd.get("link_url")?.trim()||null;const courseId=Number(e.target.dataset.course);const {error}=await sb.from("forum_replies").insert({thread_id:Number(e.target.dataset.thread),user_id:state.user.id,body,link_url});if(error){toast("No se pudo responder: "+error.message,true);return;}delete state.forum[courseId];toast("Respuesta publicada");renderShell();});
+
+  const newUserBtn=document.getElementById("newUser");
+  if(newUserBtn)newUserBtn.onclick=()=>{
+    showModal("Nuevo usuario",newUserForm(),async fd=>{
+      const full_name=String(fd.get("full_name")||"").trim();
+      const email=String(fd.get("email")||"").trim().toLowerCase();
+      const password=String(fd.get("password")||"");
+      const role=String(fd.get("role")||"student");
+      const course_ids=fd.getAll("course_ids").map(Number).filter(Number.isFinite);
+      if(!full_name||!email||password.length<6){toast("Completá nombre, email y una clave de al menos 6 caracteres.",true);return false;}
+      const submit=document.querySelector("#modalForm .primary");
+      if(submit){submit.disabled=true;submit.textContent="Creando...";}
+      const {data,error}=await sb.functions.invoke("admin-create-user",{body:{full_name,email,password,role,course_ids}});
+      if(error||!data?.ok){
+        const message=data?.error||error?.message||"No se pudo crear el usuario.";
+        toast(message,true);
+        if(submit){submit.disabled=false;submit.textContent="Guardar";}
+        return false;
+      }
+      toast("Usuario creado correctamente");
+      setTimeout(()=>showCreatedUserAccess(full_name,email,password),80);
+      setTimeout(()=>renderShell(),120);
+      return true;
+    });
+    setTimeout(()=>{
+      const toggle=document.getElementById("toggleNewUserPassword");
+      const input=document.getElementById("newUserPassword");
+      if(toggle&&input)toggle.onclick=()=>{const visible=input.type==="text";input.type=visible?"password":"text";toggle.textContent=visible?"Mostrar":"Ocultar";};
+    },0);
+  };
 
   document.querySelectorAll(".membership-check").forEach(ch=>ch.onchange=async()=>{const user_id=ch.dataset.user,course_id=Number(ch.dataset.course);ch.disabled=true;let error;if(ch.checked)({error}=await sb.from("course_members").insert({user_id,course_id}));else({error}=await sb.from("course_members").delete().eq("user_id",user_id).eq("course_id",course_id));ch.disabled=false;if(error){ch.checked=!ch.checked;toast(error.message,true);}else toast("Acceso actualizado");});
 

@@ -1,0 +1,42 @@
+CÓRDOBA CASTING · AULA VIRTUAL V16 · USUARIOS DESDE EL AULA
+============================================================
+
+NOVEDAD PRINCIPAL
+- El administrador puede crear alumnos y profesores desde "Usuarios y accesos".
+- Se carga nombre, email, rol, clave y uno o varios cursos.
+- La clave NO es temporal: sigue siendo válida hasta que el usuario la cambie.
+- Podés repetir la misma clave para todos los alumnos de un curso.
+- La cuenta queda con el email confirmado y puede iniciar sesión inmediatamente.
+- Después de crearla, el Aula muestra los datos de acceso y permite copiarlos.
+- El buscador ahora encuentra por nombre o email.
+
+SEGURIDAD
+La clave administrativa de Supabase NO se guarda en GitHub ni en app.js.
+La creación de cuentas se hace mediante la Edge Function "admin-create-user".
+Esa función verifica que la persona que hace el alta tenga rol admin.
+
+ORDEN DE INSTALACIÓN
+1) Supabase > SQL Editor > New query.
+   Abrí supabase_v16_UNICA.sql y pegá TODO SU CONTENIDO (no el nombre del archivo).
+   Ejecutá y verificá que diga Success.
+
+2) Supabase > Edge Functions.
+   Creá/desplegá una función llamada EXACTAMENTE:
+   admin-create-user
+   El código está en:
+   supabase/functions/admin-create-user/index.ts
+
+3) Recién después actualizá GitHub Pages con los archivos de V16.
+   No subas la carpeta supabase si no querés: para la web importan principalmente
+   index.html, app.js, styles.css, supabase-config.js y assets/.
+
+4) Entrá como administrador > Usuarios > + Nuevo usuario.
+   Probá con una cuenta de prueba.
+
+IMPORTANTE
+- NO pongas nunca SUPABASE_SERVICE_ROLE_KEY dentro de supabase-config.js, app.js o GitHub.
+- La Edge Function usa la clave segura que Supabase expone sólo del lado servidor.
+- No se envía un email automático al crear la cuenta. El alumno entra con el email
+  que te dio y la clave que vos le asignaste.
+- Si luego cambia su clave desde "Mi perfil" o recuperación por email, la clave
+  inicial deja de funcionar porque la contraseña de la cuenta fue reemplazada.

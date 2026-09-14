@@ -560,3 +560,8 @@ body{background:
   .phrase-picker-copy h2{font-size:1.55rem}
   .hero-actions{width:100%}.hero-actions button{flex:1}
 }
+
+/* ==========================================================
+   V16 · ALTA DE USUARIOS DESDE EL AULA
+   ========================================================== */
+.new-user-form{display:grid;gap:4px}.new-user-course-list{max-height:220px;overflow:auto;padding-right:4px}.new-user-course{background:#fbf8f9}.password-inline{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px;align-items:center}.field-hint{margin-top:6px;font-size:.72rem;line-height:1.45;color:var(--muted)}.user-email{color:#7b2cbf!important}.created-user-modal{max-width:520px}.created-user-access{display:grid;gap:10px;margin:6px 0 14px}.created-user-access>div{display:grid;gap:4px;padding:12px 14px;border:1px solid var(--line);border-radius:12px;background:#faf7f8}.created-user-access span{font-size:.66rem;font-weight:900;letter-spacing:.05em;text-transform:uppercase;color:var(--muted)}.created-user-access strong{font-size:.88rem;color:var(--wine-dark);word-break:break-word}.created-password{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;letter-spacing:.04em}.user-hero .primary{align-self:center;white-space:nowrap}@media(max-width:640px){.password-inline{grid-template-columns:1fr}.password-inline .mini{justify-self:start}.user-hero .primary{width:100%}}
